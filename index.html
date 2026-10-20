@@ -21,12 +21,12 @@
   <div id="root"></div>
   <script type="text/babel" data-presets="react">
 const { useState, useRef, useEffect } = React;
-
-
+ 
+ 
 // ▼▼▼ Apps Script를 "웹 앱"으로 배포한 뒤 나온 주소(/exec로 끝남)를 따옴표 안에 붙여넣으세요 ▼▼▼
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbxNwfXX6A9lhL33itj9FtC_vj4CXqdTpexYOyrAL9cIBmwndA9Fn489zD4sk_ZV_Io/exec';
 // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
-
+ 
 // Apps Script 서버 함수를 호출합니다. (text/plain으로 보내야 브라우저 보안 검사에 막히지 않습니다)
 const serverCall = async (name, ...args) => {
   let res;
@@ -48,7 +48,7 @@ const serverCall = async (name, ...args) => {
   if (!data.ok) throw new Error(data.error || '서버 오류가 발생했어요.');
   return data.result;
 };
-
+ 
 const App = () => {
   const [step, setStep] = useState(1);
   const [formData, setFormData] = useState({
@@ -66,7 +66,7 @@ const App = () => {
     imageMimeType: null,
     imageDataBase64: null,
   });
-
+ 
   const [aiFeedback, setAiFeedback] = useState(null);
   const [judgment, setJudgment] = useState(null); 
   const [revisedData, setRevisedData] = useState({
@@ -82,7 +82,7 @@ const App = () => {
   const [currentCandidateIndex, setCurrentCandidateIndex] = useState(0);
   const [selectedImage, setSelectedImage] = useState(null);
   const [generationCount, setGenerationCount] = useState(0);
-
+ 
   const [finalImage, setFinalImage] = useState(null);
   const [padletUrl, setPadletUrl] = useState('#');
   const [isLoading, setIsLoading] = useState(false);
@@ -91,7 +91,7 @@ const App = () => {
   
   const [isEditingPoster, setIsEditingPoster] = useState(false);
   const [editablePosterData, setEditablePosterData] = useState(null);
-
+ 
   const [currentRecordId, setCurrentRecordId] = useState(null);
   // 같은 학생 활동은 처음부터 끝까지 반드시 같은 recordId를 사용합니다.
   // 저장이 거의 동시에 두 번 호출되어도 새 ID가 생기지 않도록 ref로 고정합니다.
@@ -106,14 +106,14 @@ const App = () => {
   const [viewingRecord, setViewingRecord] = useState(null);
   const [deleteTargetId, setDeleteTargetId] = useState(null);
   const [clearAllConfirmStep, setClearAllConfirmStep] = useState(0);
-
+ 
   useEffect(() => {
     if (clickCount >= 3) {
       setShowTeacherLogin(true);
       setClickCount(0);
     }
   }, [clickCount]);
-
+ 
   const loadRecords = async (token = teacherToken) => {
     try {
       const data = await serverCall('getStudentRecords', token);
@@ -123,7 +123,7 @@ const App = () => {
       alert(e.message || '학생 기록을 불러오지 못했습니다.');
     }
   };
-
+ 
   const saveRecordToLocal = async (posterData, posterDataUrl = null) => {
     try {
       const finalData = judgment === 'revise' ? { ...formData, ...revisedData } : formData;
@@ -134,7 +134,7 @@ const App = () => {
           `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
       }
       const id = recordIdRef.current;
-
+ 
       const newRecord = {
         id,
         timestamp: new Date().toISOString(),
@@ -158,7 +158,7 @@ const App = () => {
         posterDataUrl,
         status: '완료'
       };
-
+ 
       const result = await serverCall('saveStudentRecord', newRecord);
       const savedId = result?.id || id;
       recordIdRef.current = savedId;
@@ -170,20 +170,20 @@ const App = () => {
       return null;
     }
   };
-
+ 
   useEffect(() => {
     serverCall('getAppConfig').then(cfg => {
       if (cfg?.padletUrl) setPadletUrl(cfg.padletUrl);
     }).catch(console.error);
   }, []);
-
+ 
   const fileInputRef = useRef(null);
   const posterRef = useRef(null); 
-
+ 
   const steps = [
     "구상하기", "AI 점검", "나의 판단", "최종 설계", "실물화", "완성"
   ];
-
+ 
   const ProgressBar = () => (
     <div className="w-full bg-emerald-50 py-4 px-6 border-b border-emerald-100 sticky top-0 z-10">
       <div className="max-w-4xl mx-auto flex items-center justify-between">
@@ -203,14 +203,14 @@ const App = () => {
       </div>
     </div>
   );
-
+ 
   const handleHeaderClick = () => {
     setClickCount(prev => prev + 1);
     if (clickTimer) clearTimeout(clickTimer);
     const timer = setTimeout(() => setClickCount(0), 1000);
     setClickTimer(timer);
   };
-
+ 
   const Header = () => (
     <div className="text-center mb-8 pt-6">
       <h1 
@@ -227,12 +227,12 @@ const App = () => {
       </div>
     </div>
   );
-
+ 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
-
+ 
   const handleEnergyToggle = (type) => {
     setFormData(prev => {
       const energies = prev.energies.includes(type)
@@ -241,7 +241,7 @@ const App = () => {
       return { ...prev, energies };
     });
   };
-
+ 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -258,7 +258,7 @@ const App = () => {
       reader.readAsDataURL(file);
     }
   };
-
+ 
   const requestAiFeedback = async () => {
     const requiredFields = ['name', 'target', 'eco'];
     const missing = requiredFields.filter(field => !formData[field] || formData[field].trim() === '');
@@ -266,7 +266,7 @@ const App = () => {
       alert("필수 항목에 입력하지 않은 빈칸이 있거나 에너지를 선택하지 않았거나 그림을 올리지 않았습니다. 모두 채워주세요!");
       return;
     }
-
+ 
     setIsLoading(true);
     setLoadingMessage("AI가 설계도를 꼼꼼히 살펴보고 있어요...");
     setError('');
@@ -291,16 +291,16 @@ const App = () => {
       setIsLoading(false);
     }
   };
-
+ 
   // 실물화 이미지 생성 함수 (최대 2회, 후보 목록에 추가)
   // 실물화 이미지 생성 함수 (최대 2회, 후보 목록에 추가)
   const requestImageGeneration = async () => {
     if (generationCount >= 2) return;
-
+ 
     setIsLoading(true);
     setLoadingMessage(`✨ 여러분의 상상이 현실이 되는 중입니다... (${generationCount + 1}/2회 생성 중)`);
     setError('');
-
+ 
     const finalData = judgment === 'revise' ? { ...formData, ...revisedData } : formData;
     try {
       const result = await serverCall('requestImageGenerationServer', {
@@ -328,7 +328,7 @@ const App = () => {
       setIsLoading(false);
     }
   };
-
+ 
   // 학생이 선택한 이미지로 최종 결정하고 STEP 6 완성 단계로 이동
   // 학생이 선택한 이미지로 최종 결정하고 STEP 6 완성 단계로 이동
   const handleConfirmSelectedImage = (imageUri) => {
@@ -338,9 +338,9 @@ const App = () => {
         alert('선택된 이미지가 없습니다. 이미지를 다시 선택해 주세요.');
         return;
       }
-
+ 
       const finalData = judgment === 'revise' ? { ...formData, ...revisedData } : { ...formData };
-
+ 
       const summarizeText = (text, maxLength = 60) => {
         const cleaned = String(text || '').trim();
         if (!cleaned) return '';
@@ -351,17 +351,17 @@ const App = () => {
         }
         return cleaned.substring(0, maxLength) + '...';
       };
-
+ 
       const ecoPoints = String(finalData.eco || '')
         .split(/[.!?\n]/)
         .map(s => s.trim())
         .filter(Boolean)
         .slice(0, 3);
-
+ 
       if (ecoPoints.length === 0) {
         ecoPoints.push('친환경 에너지 활용');
       }
-
+ 
       const posterData = {
         name: finalData.name || '',
         designer: finalData.designer || '',
@@ -372,14 +372,14 @@ const App = () => {
         steer: finalData.steer ? summarizeText(finalData.steer, 50) : '',
         brake: finalData.brake ? summarizeText(finalData.brake, 50) : '',
       };
-
+ 
       setSelectedImage(chosenImage);
       setFinalImage(chosenImage);
       setEditablePosterData(posterData);
       setIsEditingPoster(false);
       setError('');
       setStep(6);
-
+ 
       // 학생 기록은 비동기로 저장합니다. 화면 전환을 막지 않습니다.
       setTimeout(() => {
         saveRecordToLocal(posterData).catch?.(() => {});
@@ -389,7 +389,7 @@ const App = () => {
       setError('완성 화면으로 이동하는 중 문제가 생겼어요. 다시 한 번 눌러 주세요.');
     }
   };
-
+ 
   const currentPosterDataSafe = () => {
     const finalData = judgment === 'revise' ? { ...formData, ...revisedData } : formData;
     return editablePosterData || {
@@ -398,7 +398,7 @@ const App = () => {
       steer: finalData.steer || '', brake: finalData.brake || ''
     };
   };
-
+ 
   const handleDownloadPoster = async () => {
     if (!posterRef.current || !window.html2canvas) {
       alert("포스터 저장 기능을 준비 중입니다. 잠시 후 다시 시도해주세요.");
@@ -409,13 +409,31 @@ const App = () => {
     setLoadingMessage("멋진 포스터를 이미지로 굽고 있어요...");
     
     try {
-      const canvas = await window.html2canvas(posterRef.current, {
-        scale: 2,
+      const el = posterRef.current;
+ 
+      // 글꼴과 이미지가 완전히 준비된 뒤에 찍어야 흐릿하거나 빈 칸이 생기지 않습니다.
+      if (document.fonts && document.fonts.ready) await document.fonts.ready;
+      await Promise.all(Array.from(el.querySelectorAll('img')).map(img =>
+        img.complete ? Promise.resolve() : new Promise(r => { img.onload = r; img.onerror = r; })
+      ));
+ 
+      // 해상도: 기본 3배. 단, 태블릿 브라우저의 캔버스 크기 한계(약 1,600만 픽셀)를 넘지 않게 자동 조절합니다.
+      const MAX_PIXELS = 14000000;
+      const w = el.offsetWidth, h = el.offsetHeight;
+      const scale = Math.max(1.5, Math.min(3, Math.sqrt(MAX_PIXELS / (w * h))));
+ 
+      const canvas = await window.html2canvas(el, {
+        scale,
         useCORS: true,
-        backgroundColor: '#f8fafc'
+        backgroundColor: '#f8fafc',
+        windowWidth: Math.max(document.documentElement.clientWidth, w + 100),
+        scrollX: 0,
+        scrollY: -window.scrollY
       });
       const image = canvas.toDataURL("image/png");
-      await saveRecordToLocal(editablePosterData || currentPosterDataSafe(), image);
+      // 드라이브 저장용은 용량을 줄인 고화질 JPG로 보내 저장 시간을 줄입니다.
+      const imageForDrive = canvas.toDataURL("image/jpeg", 0.92);
+      await saveRecordToLocal(editablePosterData || currentPosterDataSafe(), imageForDrive);
       const link = document.createElement('a');
       link.href = image;
       link.download = `${editablePosterData?.name || formData.name}_설계포스터.png`;
@@ -429,7 +447,7 @@ const App = () => {
       setIsLoading(false);
     }
   };
-
+ 
   const renderStep1 = () => (
     <div className="space-y-6">
       <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-emerald-100">
@@ -447,21 +465,21 @@ const App = () => {
                 className="w-full p-4 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 focus:ring-0 text-lg transition"
                 placeholder="예: 태양빛 씽씽카" />
             </div>
-
+ 
             <div>
               <label className="block text-gray-700 font-bold mb-2">② 포스터에 표시될 나의 이름이나 별명은?</label>
               <input type="text" name="designer" value={formData.designer} onChange={handleInputChange}
                 className="w-full p-4 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 focus:ring-0 text-lg transition"
                 placeholder="예: 김하늘 또는 초록 발명가 (비워두면 '미래 설계자'로 표시됩니다)" />
             </div>
-
+ 
             <div>
               <label className="block text-gray-700 font-bold mb-2">③ 누구 또는 무엇을 어떻게 이동시키나요?</label>
               <textarea name="target" value={formData.target} onChange={handleInputChange} rows="2"
                 className="w-full p-4 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 focus:ring-0 text-lg transition"
                 placeholder="예: 사람 4명을 태우고 도시 안을 이동해요." />
             </div>
-
+ 
             <div>
               <label className="block text-gray-700 font-bold mb-3">④ 무엇의 힘으로 움직이나요? (복수 선택 가능)</label>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
@@ -482,14 +500,14 @@ const App = () => {
                   placeholder="어떤 힘으로 움직이는지 직접 적어주세요" />
               )}
             </div>
-
+ 
             <div>
               <label className="block text-gray-700 font-bold mb-2">⑤ 어떻게 환경을 보호하나요?</label>
               <textarea name="eco" value={formData.eco} onChange={handleInputChange} rows="2"
                 className="w-full p-4 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 focus:ring-0 text-lg transition"
                 placeholder="예: 매연을 뿜지 않고, 공기를 깨끗하게 걸러내요." />
             </div>
-
+ 
             <div className="pt-4 border-t border-dashed border-emerald-200">
               <label className="block text-gray-700 font-bold mb-2">⑥ 내가 생각한 모습을 보여 주세요</label>
               <p className="text-sm text-gray-500 mb-4">종이에 그린 그림을 사진으로 찍어서 올려주세요. AI가 이 그림을 바탕으로 진짜처럼 만들어줍니다!</p>
@@ -513,7 +531,7 @@ const App = () => {
               )}
             </div>
           </div>
-
+ 
           <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 space-y-5 mt-8">
             <div className="mb-2">
               <h3 className="font-bold text-gray-800 text-xl flex items-center">
@@ -521,28 +539,28 @@ const App = () => {
               </h3>
               <p className="text-sm text-gray-500 mt-1">시간이 있거나 아이디어가 떠오르면 적어 보세요. 비워 두어도 다음 단계로 갈 수 있습니다.</p>
             </div>
-
+ 
             <div>
               <label className="block text-gray-700 font-bold mb-2">✨ 특별한 기능</label>
               <textarea name="special" value={formData.special} onChange={handleInputChange} rows="2"
                 className="w-full p-4 rounded-xl border-2 border-gray-200 focus:border-gray-400 focus:ring-0 text-base transition"
                 placeholder="예: 바퀴가 접히면서 좁은 골목도 다닐 수 있어요." />
             </div>
-
+ 
             <div>
               <label className="block text-gray-700 font-bold mb-2">🔧 구동 장치</label>
               <textarea name="drive" value={formData.drive} onChange={handleInputChange} rows="2"
                 className="w-full p-4 rounded-xl border-2 border-gray-200 focus:border-gray-400 focus:ring-0 text-base transition"
                 placeholder="예: 전기로 모터가 돌아가 바퀴를 움직여요." />
             </div>
-
+ 
             <div>
               <label className="block text-gray-700 font-bold mb-2">🧭 조향 장치</label>
               <textarea name="steer" value={formData.steer} onChange={handleInputChange} rows="2"
                 className="w-full p-4 rounded-xl border-2 border-gray-200 focus:border-gray-400 focus:ring-0 text-base transition"
                 placeholder="예: 핸들과 센서로 방향을 바꿔요." />
             </div>
-
+ 
             <div>
               <label className="block text-gray-700 font-bold mb-2">🛑 제동 장치</label>
               <textarea name="brake" value={formData.brake} onChange={handleInputChange} rows="2"
@@ -551,7 +569,7 @@ const App = () => {
             </div>
           </div>
         </div>
-
+ 
         <button onClick={requestAiFeedback} disabled={isLoading} type="button"
           className="w-full mt-8 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xl py-5 rounded-2xl shadow-lg transition-transform active:scale-95 disabled:opacity-50 flex items-center justify-center">
           {isLoading ? '로딩 중...' : '🤖 AI에게 내 설계 점검받기'}
@@ -559,7 +577,7 @@ const App = () => {
       </div>
     </div>
   );
-
+ 
   const renderStep2And3 = () => (
     <div className="space-y-6">
       <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-emerald-100">
@@ -575,7 +593,7 @@ const App = () => {
             </h3>
             <p className="text-blue-900 text-lg">{aiFeedback?.compliment}</p>
           </div>
-
+ 
           <div className="bg-orange-50 p-5 rounded-xl border border-orange-100">
             <h3 className="font-bold text-orange-800 flex items-center mb-2">
               <span className="text-xl mr-2">💡</span> AI의 제안
@@ -584,7 +602,7 @@ const App = () => {
           </div>
         </div>
       </div>
-
+ 
       {step === 2 && (
         <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-emerald-100 animate-fade-in-up">
           <h2 className="text-2xl font-extrabold text-gray-800 mb-6">🤔 AI의 조언을 보고 내 설계를 더 추가하거나 고치고 싶은가요?</h2>
@@ -611,7 +629,7 @@ const App = () => {
           </div>
         </div>
       )}
-
+ 
       {step === 3 && judgment === 'keep' && (
         <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-emerald-100 animate-fade-in-up">
           <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
@@ -627,7 +645,7 @@ const App = () => {
           </button>
         </div>
       )}
-
+ 
       {step === 3 && judgment === 'revise' && (
         <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-emerald-100 animate-fade-in-up">
           <h2 className="text-2xl font-bold text-emerald-800 mb-6 flex items-center">
@@ -647,32 +665,32 @@ const App = () => {
               <textarea value={revisedData.eco} onChange={(e) => setRevisedData({...revisedData, eco: e.target.value})} rows="2"
                 className="w-full p-4 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 focus:ring-0 text-base" />
             </div>
-
+ 
             <div>
               <label className="block text-emerald-700 font-bold mb-2">✨ 특별한 기능</label>
               <textarea value={revisedData.special} onChange={(e) => setRevisedData({...revisedData, special: e.target.value})} rows="2"
                 className="w-full p-4 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 focus:ring-0 text-base" />
             </div>
-
+ 
             <div>
               <label className="block text-emerald-700 font-bold mb-2">🔧 구동 장치 <span className="text-gray-500 font-normal text-sm ml-1">내 수송수단은 어떻게 움직이나요?</span></label>
               <textarea value={revisedData.drive} onChange={(e) => setRevisedData({...revisedData, drive: e.target.value})} rows="2"
                 className="w-full p-4 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 focus:ring-0 text-base" />
             </div>
-
+ 
             <div>
               <label className="block text-emerald-700 font-bold mb-2">🧭 조향 장치 <span className="text-gray-500 font-normal text-sm ml-1">어떻게 방향을 바꾸나요?</span></label>
               <textarea value={revisedData.steer} onChange={(e) => setRevisedData({...revisedData, steer: e.target.value})} rows="2"
                 className="w-full p-4 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 focus:ring-0 text-base" />
             </div>
-
+ 
             <div>
               <label className="block text-emerald-700 font-bold mb-2">🛑 제동 장치 <span className="text-gray-500 font-normal text-sm ml-1">어떻게 멈추나요?</span></label>
               <textarea value={revisedData.brake} onChange={(e) => setRevisedData({...revisedData, brake: e.target.value})} rows="2"
                 className="w-full p-4 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 focus:ring-0 text-base" />
             </div>
           </div>
-
+ 
           <button onClick={() => setStep(4)} type="button"
             className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xl py-5 rounded-2xl shadow-lg transition-transform active:scale-95 flex items-center justify-center">
             ✅ 수정 완료하고 다음으로 ➡️
@@ -681,14 +699,14 @@ const App = () => {
       )}
     </div>
   );
-
+ 
   const renderStep4 = () => {
     const finalData = judgment === 'revise' ? { ...formData, ...revisedData } : formData;
     const isRevised = judgment === 'revise';
     const finalEnergyStr = finalData.energies.includes('♻️ 기타') 
       ? [...finalData.energies.filter(e => e !== '♻️ 기타'), finalData.energyCustom].join(', ') 
       : finalData.energies.join(', ');
-
+ 
     return (
       <div className="space-y-6">
         <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border-2 border-emerald-400">
@@ -757,7 +775,7 @@ const App = () => {
               </div>
             </div>
           </div>
-
+ 
           <button onClick={() => {
             if (candidateImages.length === 0) {
               requestImageGeneration();
@@ -774,7 +792,7 @@ const App = () => {
       </div>
     );
   };
-
+ 
   // 새로운 STEP 5: 실물화 이미지 생성, 후보 비교, 최대 2회 생성 및 최종 선택 단계
   const renderStep5 = () => {
     return (
@@ -793,7 +811,7 @@ const App = () => {
               생성 기회: <span className="text-lg font-extrabold text-purple-600">{generationCount} / 2</span>회 사용
             </div>
           </div>
-
+ 
           {candidateImages.length === 0 ? (
             <div className="text-center py-12 space-y-4">
               <div className="text-5xl">🎨</div>
@@ -831,7 +849,7 @@ const App = () => {
                     </div>
                   )}
                 </div>
-
+ 
                 <div className="w-full max-w-xl h-[380px] bg-white rounded-xl shadow-inner border border-gray-200 p-3 flex items-center justify-center overflow-hidden">
                   <img 
                     src={candidateImages[currentCandidateIndex]} 
@@ -839,7 +857,7 @@ const App = () => {
                     className="w-full h-full object-contain rounded-lg" 
                   />
                 </div>
-
+ 
                 {/* 썸네일 미리보기 바 */}
                 <div className="flex gap-3 mt-4">
                   {candidateImages.map((img, idx) => (
@@ -854,7 +872,7 @@ const App = () => {
                   ))}
                 </div>
               </div>
-
+ 
               {/* 액션 버튼 그룹 */}
               <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-gray-200">
                 <button 
@@ -863,7 +881,7 @@ const App = () => {
                   className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-lg py-5 px-6 rounded-2xl shadow-lg transition active:scale-95 flex items-center justify-center">
                   <span className="text-2xl mr-2">✅</span> 이 이미지로 결정하기
                 </button>
-
+ 
                 {generationCount < 2 ? (
                   <button 
                     onClick={requestImageGeneration} 
@@ -884,7 +902,7 @@ const App = () => {
       </div>
     );
   };
-
+ 
   const renderStep6 = () => {
     const finalData = judgment === 'revise' ? { ...formData, ...revisedData } : formData;
     const currentPosterData = editablePosterData || {
@@ -897,10 +915,10 @@ const App = () => {
       steer: finalData.steer || '',
       brake: finalData.brake || '',
     };
-
+ 
     const designerName = currentPosterData.designer.trim() !== '' ? currentPosterData.designer : '미래 설계자';
     const ecoPointsList = currentPosterData.ecoPoints.split('\n').map(s => s.trim()).filter(s => s.length > 0);
-
+ 
     const energyIcons = finalData.energies.map(e => {
       if (e.includes('태양')) return '☀️';
       if (e.includes('전기')) return '⚡';
@@ -909,11 +927,11 @@ const App = () => {
       if (e.includes('바람')) return '🌬️';
       return '♻️';
     }).join('');
-
+ 
     const energyNames = finalData.energies.includes('♻️ 기타')
       ? [...finalData.energies.filter(e => e !== '♻️ 기타'), finalData.energyCustom].join(' + ')
       : finalData.energies.join(' + ');
-
+ 
     return (
       <div className="space-y-8 animate-fade-in-up">
         <div className="text-center mb-6">
@@ -932,14 +950,14 @@ const App = () => {
                 <span className="text-2xl mr-2">↩️</span> 수정 취소하고 돌아가기
               </button>
             )}
-
+ 
             <button onClick={handleDownloadPoster} type="button"
               className="flex-1 flex items-center justify-center py-4 px-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl transition-transform shadow-md font-extrabold text-lg active:scale-95 border border-emerald-700">
               <span className="text-2xl mr-2">🖼️</span> 설계 포스터 저장하기
             </button>
           </div>
         </div>
-
+ 
         {isEditingPoster ? (
           <div className="max-w-3xl mx-auto bg-white p-8 rounded-3xl shadow-xl border-2 border-amber-300 space-y-6 animate-fade-in-up">
             <div className="border-b border-gray-200 pb-4 flex items-center justify-between">
@@ -948,11 +966,11 @@ const App = () => {
               </h3>
               <span className="text-xs bg-amber-100 text-amber-800 font-bold px-3 py-1 rounded-full">학생 자유 편집</span>
             </div>
-
+ 
             <p className="text-gray-600 text-sm">
               AI가 요약한 문구나 기존 작성 내용을 바탕으로, 포스터에 가장 어울리는 멋진 문장으로 자유롭게 고쳐보세요!
             </p>
-
+ 
             <div className="space-y-5">
               <div>
                 <label className="block text-gray-700 font-bold mb-2">🚗 수송수단 이름</label>
@@ -961,7 +979,7 @@ const App = () => {
                   onChange={(e) => setEditablePosterData({...currentPosterData, name: e.target.value})}
                   className="w-full p-4 rounded-xl border-2 border-amber-200 focus:border-amber-500 focus:ring-0 text-lg font-bold" />
               </div>
-
+ 
               <div>
                 <label className="block text-gray-700 font-bold mb-2">👤 학생 이름 또는 별명</label>
                 <input type="text" 
@@ -969,7 +987,7 @@ const App = () => {
                   onChange={(e) => setEditablePosterData({...currentPosterData, designer: e.target.value})}
                   className="w-full p-4 rounded-xl border-2 border-amber-200 focus:border-amber-500 focus:ring-0 text-lg font-bold" />
               </div>
-
+ 
               <div>
                 <label className="block text-gray-700 font-bold mb-2">👥 이동 대상 및 방법</label>
                 <textarea rows="2" 
@@ -977,7 +995,7 @@ const App = () => {
                   onChange={(e) => setEditablePosterData({...currentPosterData, target: e.target.value})}
                   className="w-full p-4 rounded-xl border-2 border-amber-200 focus:border-amber-500 focus:ring-0 text-base" />
               </div>
-
+ 
               <div>
                 <label className="block text-gray-700 font-bold mb-2">🌱 핵심 친환경 기능 (여러 줄 입력 가능)</label>
                 <textarea rows="3" 
@@ -986,7 +1004,7 @@ const App = () => {
                   className="w-full p-4 rounded-xl border-2 border-amber-200 focus:border-amber-500 focus:ring-0 text-base" />
                 <p className="text-xs text-gray-400 mt-1">줄바꿈을 통해 여러 개의 친환경 기능을 구분할 수 있습니다.</p>
               </div>
-
+ 
               <div>
                   <label className="block text-gray-700 font-bold mb-2">✨ 특별한 기능</label>
                   <textarea rows="2" 
@@ -994,7 +1012,7 @@ const App = () => {
                     onChange={(e) => setEditablePosterData({...currentPosterData, special: e.target.value})}
                     className="w-full p-4 rounded-xl border-2 border-amber-200 focus:border-amber-500 focus:ring-0 text-base" />
                 </div>
-
+ 
               <div>
                   <label className="block text-gray-700 font-bold mb-2">🔧 구동 장치</label>
                   <textarea rows="2" 
@@ -1002,7 +1020,7 @@ const App = () => {
                     onChange={(e) => setEditablePosterData({...currentPosterData, drive: e.target.value})}
                     className="w-full p-4 rounded-xl border-2 border-amber-200 focus:border-amber-500 focus:ring-0 text-base" />
                 </div>
-
+ 
               <div>
                   <label className="block text-gray-700 font-bold mb-2">🧭 조향 장치</label>
                   <textarea rows="2" 
@@ -1010,7 +1028,7 @@ const App = () => {
                     onChange={(e) => setEditablePosterData({...currentPosterData, steer: e.target.value})}
                     className="w-full p-4 rounded-xl border-2 border-amber-200 focus:border-amber-500 focus:ring-0 text-base" />
                 </div>
-
+ 
               <div>
                   <label className="block text-gray-700 font-bold mb-2">🛑 제동 장치</label>
                   <textarea rows="2" 
@@ -1019,7 +1037,7 @@ const App = () => {
                     className="w-full p-4 rounded-xl border-2 border-amber-200 focus:border-amber-500 focus:ring-0 text-base" />
                 </div>
             </div>
-
+ 
             <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-gray-200">
               <button onClick={() => setIsEditingPoster(false)} type="button"
                 className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-4 rounded-xl text-lg transition">
@@ -1035,7 +1053,7 @@ const App = () => {
             </div>
           </div>
         ) : null}
-
+ 
         {/* 세로형 포스터 영역 (학생이 직접 선택한 selectedImage 사용) */}
         <div className="w-full overflow-x-auto pb-4 custom-scrollbar">
           <div className="min-w-[900px] max-w-[960px] mx-auto flex justify-center p-4">
@@ -1060,7 +1078,7 @@ const App = () => {
                   </div>
                 </div>
               </div>
-
+ 
               {/* [이미지 영역] 학생이 직접 선택한 실물화 이미지와 원본 스케치 좌우 배치 */}
               <div className="grid grid-cols-2 gap-6">
                 {/* 학생이 최종 선택한 실물화 이미지 */}
@@ -1069,21 +1087,21 @@ const App = () => {
                     ✨ 내가 선택한 실물화 모델
                   </div>
                   <div className="h-[340px] bg-white rounded-lg flex items-center justify-center overflow-hidden">
-                    <img src={selectedImage || finalImage} alt="학생 선택 실물화 모델" className="w-full h-full object-contain rounded-md" />
+                    <img src={selectedImage || finalImage} alt="학생 선택 실물화 모델" className="max-w-full max-h-full w-auto h-auto rounded-md" style={{ maxHeight: '100%', maxWidth: '100%' }} />
                   </div>
                 </div>
-
+ 
                 {/* 학생이 업로드한 원본 그림 */}
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col">
                   <div className="text-emerald-800 font-extrabold text-lg mb-3 flex items-center justify-center bg-emerald-50 py-2 rounded-lg border border-emerald-100">
                     ✏️ 내가 처음 그린 스케치
                   </div>
                   <div className="h-[340px] bg-white rounded-lg flex items-center justify-center overflow-hidden p-2">
-                    <img src={finalData.imageSrc} alt="스케치 원본" className="w-full h-full object-contain rounded-md filter drop-shadow-sm" />
+                    <img src={finalData.imageSrc} alt="스케치 원본" className="max-w-full max-h-full w-auto h-auto rounded-md" style={{ maxHeight: '100%', maxWidth: '100%' }} />
                   </div>
                 </div>
               </div>
-
+ 
               {/* [이미지 아래 정보 영역] 포스터 전체 너비를 활용하는 큰 박스 형태의 정보 정리 */}
               <div className="flex flex-col gap-6">
                 
@@ -1105,7 +1123,7 @@ const App = () => {
                     </div>
                   </div>
                 </div>
-
+ 
                 {/* 두 번째: 핵심 친환경 기능 */}
                 <div className="bg-emerald-50 rounded-xl shadow-sm border border-emerald-200 p-6">
                   <h3 className="font-extrabold text-2xl text-emerald-900 mb-4 border-b border-emerald-200 pb-2 flex items-center">
@@ -1122,7 +1140,7 @@ const App = () => {
                     ))}
                   </ul>
                 </div>
-
+ 
                 {/* 세 번째: 세부 설계 */}
                 {(currentPosterData.special || currentPosterData.drive || currentPosterData.steer || currentPosterData.brake) && (
                   <div className="bg-orange-50 rounded-xl shadow-sm border border-orange-200 p-6">
@@ -1157,12 +1175,12 @@ const App = () => {
                     </div>
                   </div>
                 )}
-
+ 
               </div>
             </div>
           </div>
         </div>
-
+ 
         <div className="max-w-2xl mx-auto space-y-4 px-4 pt-4">
           <button onClick={handleDownloadPoster} type="button"
             className="w-full flex items-center justify-center py-5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl transition-transform shadow-lg font-extrabold text-xl active:scale-95 border border-emerald-700">
@@ -1183,7 +1201,7 @@ const App = () => {
       </div>
     );
   };
-
+ 
   const TeacherDashboard = () => {
     const completedCount = savedRecords.filter(r => r.status === '완료').length;
     
@@ -1211,7 +1229,7 @@ const App = () => {
             <span className="text-4xl font-black text-emerald-900">{completedCount}<span className="text-xl ml-1">명</span></span>
           </div>
         </div>
-
+ 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-12">
           {savedRecords.map(record => (
             <div key={record.id} className="bg-white border-2 border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all">
@@ -1245,7 +1263,7 @@ const App = () => {
             </div>
           )}
         </div>
-
+ 
         {savedRecords.length > 0 && (
           <div className="border-t-2 border-gray-100 pt-8 text-center">
             <button 
@@ -1259,7 +1277,7 @@ const App = () => {
       </div>
     );
   };
-
+ 
   const renderTeacherModals = () => {
     return (
       <>
@@ -1305,7 +1323,7 @@ const App = () => {
             </div>
           </div>
         )}
-
+ 
         {deleteTargetId && (
           <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl animate-fade-in-up">
@@ -1335,7 +1353,7 @@ const App = () => {
             </div>
           </div>
         )}
-
+ 
         {clearAllConfirmStep > 0 && (
           <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl animate-fade-in-up border-2 border-red-200">
@@ -1377,7 +1395,7 @@ const App = () => {
             </div>
           </div>
         )}
-
+ 
         {viewingRecord && (
           <div className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
             <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl animate-fade-in-up overflow-hidden">
@@ -1417,7 +1435,7 @@ const App = () => {
                     </div>
                   </div>
                 </div>
-
+ 
                 {viewingRecord.candidateImages?.length > 1 && (
                   <div className="bg-purple-50/50 p-6 rounded-2xl border border-purple-100">
                     <h4 className="font-black text-purple-800 mb-4">실물화 후보 이미지</h4>
@@ -1431,7 +1449,7 @@ const App = () => {
                     </div>
                   </div>
                 )}
-
+ 
                 <div className="bg-emerald-50/50 p-6 rounded-2xl border border-emerald-100 space-y-4">
                   <h4 className="font-black text-emerald-800 border-b border-emerald-200 pb-2 mb-4">설계 상세 내용</h4>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1454,14 +1472,14 @@ const App = () => {
                     {viewingRecord.brake && <div><span className="font-extrabold text-gray-500 block text-sm">제동 장치</span> <span className="font-bold text-gray-800">{viewingRecord.brake}</span></div>}
                   </div>
                 </div>
-
+ 
                 {viewingRecord.finalPoster && (
                   <div className="bg-amber-50/50 p-6 rounded-2xl border border-amber-100">
                     <h4 className="font-black text-amber-800 border-b border-amber-200 pb-2 mb-4">최종 설계 포스터</h4>
                     <img src={viewingRecord.finalPoster} alt="최종 포스터" className="w-full h-auto rounded-xl border border-amber-200 bg-white" />
                   </div>
                 )}
-
+ 
                 {viewingRecord.aiFeedback && (
                   <div className="bg-blue-50/50 p-6 rounded-2xl border border-blue-100">
                     <h4 className="font-black text-blue-800 border-b border-blue-200 pb-2 mb-4">AI 피드백 및 학생의 판단</h4>
@@ -1499,11 +1517,11 @@ const App = () => {
       </>
     );
   };
-
+ 
   return (
     <div className="min-h-screen bg-emerald-50/50 font-sans text-gray-800 pb-20">
       {renderTeacherModals()}
-
+ 
       {isTeacherMode ? (
         <div className="max-w-6xl mx-auto px-4 py-8 animate-fade-in-up">
           <TeacherDashboard />
@@ -1514,7 +1532,7 @@ const App = () => {
           
           <div className="max-w-4xl mx-auto px-4">
             <Header />
-
+ 
             {error && (
               <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded-r-xl shadow-sm animate-fade-in-up">
                 <div className="flex items-center">
@@ -1523,7 +1541,7 @@ const App = () => {
                 </div>
               </div>
             )}
-
+ 
             {}
             {step === 1 && renderStep1()}
             {(step === 2 || step === 3) && renderStep2And3()}
@@ -1546,7 +1564,7 @@ const App = () => {
     </div>
   );
 };
-
+ 
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
   </script>
 </body>
