@@ -1,0 +1,1553 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>죽음의 먼지를 멈춰라! 미래 수송수단 연구소</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <style>
+    body { margin: 0; }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-fade-in-up { animation: fadeInUp .25s ease-out; }
+    .custom-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 999px; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel" data-presets="react">
+const { useState, useRef, useEffect } = React;
+
+
+// ▼▼▼ Apps Script를 "웹 앱"으로 배포한 뒤 나온 주소(/exec로 끝남)를 따옴표 안에 붙여넣으세요 ▼▼▼
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxNwfXX6A9lhL33itj9FtC_vj4CXqdTpexYOyrAL9cIBmwndA9Fn489zD4sk_ZV_Io/exec';
+// ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+// Apps Script 서버 함수를 호출합니다. (text/plain으로 보내야 브라우저 보안 검사에 막히지 않습니다)
+const serverCall = async (name, ...args) => {
+  let res;
+  try {
+    res = await fetch(GAS_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: name, args })
+    });
+  } catch (e) {
+    throw new Error('서버에 연결하지 못했어요. 인터넷 연결이나 GAS_URL 주소를 확인해 주세요.');
+  }
+  let data;
+  try {
+    data = await res.json();
+  } catch (e) {
+    throw new Error('서버 응답을 읽지 못했어요. Apps Script 배포 권한이 "모든 사용자"인지 확인해 주세요.');
+  }
+  if (!data.ok) throw new Error(data.error || '서버 오류가 발생했어요.');
+  return data.result;
+};
+
+const App = () => {
+  const [step, setStep] = useState(1);
+  const [formData, setFormData] = useState({
+    name: '',
+    designer: '', 
+    target: '',
+    energies: [], 
+    energyCustom: '',
+    eco: '',
+    special: '',
+    drive: '', 
+    steer: '', 
+    brake: '', 
+    imageSrc: null,
+    imageMimeType: null,
+    imageDataBase64: null,
+  });
+
+  const [aiFeedback, setAiFeedback] = useState(null);
+  const [judgment, setJudgment] = useState(null); 
+  const [revisedData, setRevisedData] = useState({
+    eco: '',
+    special: '',
+    drive: '',
+    steer: '',
+    brake: '',
+  });
+  
+  // STEP 5 상태 변수들 (다중 후보 이미지 관리)
+  const [candidateImages, setCandidateImages] = useState([]);
+  const [currentCandidateIndex, setCurrentCandidateIndex] = useState(0);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [generationCount, setGenerationCount] = useState(0);
+
+  const [finalImage, setFinalImage] = useState(null);
+  const [padletUrl, setPadletUrl] = useState('#');
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('');
+  const [error, setError] = useState('');
+  
+  const [isEditingPoster, setIsEditingPoster] = useState(false);
+  const [editablePosterData, setEditablePosterData] = useState(null);
+
+  const [currentRecordId, setCurrentRecordId] = useState(null);
+  // 같은 학생 활동은 처음부터 끝까지 반드시 같은 recordId를 사용합니다.
+  // 저장이 거의 동시에 두 번 호출되어도 새 ID가 생기지 않도록 ref로 고정합니다.
+  const recordIdRef = useRef(null);
+  const [clickCount, setClickCount] = useState(0);
+  const [clickTimer, setClickTimer] = useState(null);
+  const [showTeacherLogin, setShowTeacherLogin] = useState(false);
+  const [teacherPassword, setTeacherPassword] = useState('');
+  const [isTeacherMode, setIsTeacherMode] = useState(false);
+  const [teacherToken, setTeacherToken] = useState('');
+  const [savedRecords, setSavedRecords] = useState([]);
+  const [viewingRecord, setViewingRecord] = useState(null);
+  const [deleteTargetId, setDeleteTargetId] = useState(null);
+  const [clearAllConfirmStep, setClearAllConfirmStep] = useState(0);
+
+  useEffect(() => {
+    if (clickCount >= 3) {
+      setShowTeacherLogin(true);
+      setClickCount(0);
+    }
+  }, [clickCount]);
+
+  const loadRecords = async (token = teacherToken) => {
+    try {
+      const data = await serverCall('getStudentRecords', token);
+      setSavedRecords(data || []);
+    } catch (e) {
+      console.error("기록 불러오기 실패", e);
+      alert(e.message || '학생 기록을 불러오지 못했습니다.');
+    }
+  };
+
+  const saveRecordToLocal = async (posterData, posterDataUrl = null) => {
+    try {
+      const finalData = judgment === 'revise' ? { ...formData, ...revisedData } : formData;
+      const designerName = posterData?.designer?.trim() !== '' ? posterData?.designer : (finalData.designer?.trim() !== '' ? finalData.designer : '미래 설계자');
+      if (!recordIdRef.current) {
+        recordIdRef.current =
+          currentRecordId ||
+          `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      }
+      const id = recordIdRef.current;
+
+      const newRecord = {
+        id,
+        timestamp: new Date().toISOString(),
+        studentName: designerName,
+        vehicleName: posterData?.name || finalData.name,
+        target: finalData.target,
+        energies: finalData.energies,
+        energyCustom: finalData.energyCustom,
+        eco: finalData.eco,
+        special: finalData.special,
+        drive: finalData.drive,
+        steer: finalData.steer,
+        brake: finalData.brake,
+        imageSrc: finalData.imageSrc,
+        aiFeedback,
+        judgment,
+        revisedData: judgment === 'revise' ? revisedData : null,
+        finalImage: selectedImage || finalImage || candidateImages[currentCandidateIndex] || null,
+        candidateImages,
+        posterData,
+        posterDataUrl,
+        status: '완료'
+      };
+
+      const result = await serverCall('saveStudentRecord', newRecord);
+      const savedId = result?.id || id;
+      recordIdRef.current = savedId;
+      setCurrentRecordId(savedId);
+      return savedId;
+    } catch (e) {
+      console.warn("공용 저장 실패:", e);
+      alert('학생 기록 저장 중 문제가 생겼어요. ' + (e.message || ''));
+      return null;
+    }
+  };
+
+  useEffect(() => {
+    serverCall('getAppConfig').then(cfg => {
+      if (cfg?.padletUrl) setPadletUrl(cfg.padletUrl);
+    }).catch(console.error);
+  }, []);
+
+  const fileInputRef = useRef(null);
+  const posterRef = useRef(null); 
+
+  const steps = [
+    "구상하기", "AI 점검", "나의 판단", "최종 설계", "실물화", "완성"
+  ];
+
+  const ProgressBar = () => (
+    <div className="w-full bg-emerald-50 py-4 px-6 border-b border-emerald-100 sticky top-0 z-10">
+      <div className="max-w-4xl mx-auto flex items-center justify-between">
+        {steps.map((s, index) => (
+          <div key={index} className="flex flex-col items-center">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm
+              ${step === index + 1 ? 'bg-emerald-500 text-white shadow-md transform scale-110' : 
+                step > index + 1 ? 'bg-emerald-200 text-emerald-700' : 'bg-gray-200 text-gray-400'}`}>
+              {index + 1}
+            </div>
+            <span className={`text-xs mt-1 font-medium hidden md:block
+              ${step === index + 1 ? 'text-emerald-700' : 'text-gray-500'}`}>
+              {s}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const handleHeaderClick = () => {
+    setClickCount(prev => prev + 1);
+    if (clickTimer) clearTimeout(clickTimer);
+    const timer = setTimeout(() => setClickCount(0), 1000);
+    setClickTimer(timer);
+  };
+
+  const Header = () => (
+    <div className="text-center mb-8 pt-6">
+      <h1 
+        className="text-2xl md:text-4xl font-extrabold text-emerald-800 mb-2 tracking-tight select-none cursor-default"
+        onClick={handleHeaderClick}
+      >
+        🌱 죽음의 먼지를 멈춰라! 미래 수송수단 연구소
+      </h1>
+      <p className="text-sm md:text-base text-gray-600 mb-4 px-4 max-w-2xl mx-auto break-keep">
+        『죽음의 먼지가 내려와요』 속 도시의 수송수단을 친환경 수송수단으로 바꾸어 이야기의 미래를 바꾸어 봅시다.
+      </p>
+      <div className="inline-block bg-orange-100 border border-orange-300 text-orange-800 px-4 py-2 rounded-full font-bold shadow-sm">
+        오늘의 미션: 🚨 죽음의 먼지가 내려오지 않는 미래를 만들어라!
+      </div>
+    </div>
+  );
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleEnergyToggle = (type) => {
+    setFormData(prev => {
+      const energies = prev.energies.includes(type)
+        ? prev.energies.filter(t => t !== type)
+        : [...prev.energies, type];
+      return { ...prev, energies };
+    });
+  };
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = reader.result;
+        setFormData(prev => ({ 
+          ...prev, 
+          imageSrc: base64String,
+          imageMimeType: file.type,
+          imageDataBase64: base64String.split(',')[1]
+        }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const requestAiFeedback = async () => {
+    const requiredFields = ['name', 'target', 'eco'];
+    const missing = requiredFields.filter(field => !formData[field] || formData[field].trim() === '');
+    if (missing.length > 0 || formData.energies.length === 0 || !formData.imageSrc) {
+      alert("필수 항목에 입력하지 않은 빈칸이 있거나 에너지를 선택하지 않았거나 그림을 올리지 않았습니다. 모두 채워주세요!");
+      return;
+    }
+
+    setIsLoading(true);
+    setLoadingMessage("AI가 설계도를 꼼꼼히 살펴보고 있어요...");
+    setError('');
+    try {
+      const parsed = await serverCall('requestAiFeedbackServer', {
+        name: formData.name,
+        target: formData.target,
+        energies: formData.energies,
+        energyCustom: formData.energyCustom,
+        eco: formData.eco,
+        special: formData.special,
+        drive: formData.drive,
+        steer: formData.steer,
+        brake: formData.brake
+      });
+      setAiFeedback(parsed);
+      setStep(2);
+    } catch (err) {
+      setError("앗, AI와 통신하는 중 문제가 생겼어요. 잠시 후 다시 시도해주세요.");
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 실물화 이미지 생성 함수 (최대 2회, 후보 목록에 추가)
+  // 실물화 이미지 생성 함수 (최대 2회, 후보 목록에 추가)
+  const requestImageGeneration = async () => {
+    if (generationCount >= 2) return;
+
+    setIsLoading(true);
+    setLoadingMessage(`✨ 여러분의 상상이 현실이 되는 중입니다... (${generationCount + 1}/2회 생성 중)`);
+    setError('');
+
+    const finalData = judgment === 'revise' ? { ...formData, ...revisedData } : formData;
+    try {
+      const result = await serverCall('requestImageGenerationServer', {
+        name: finalData.name,
+        energies: finalData.energies,
+        energyCustom: finalData.energyCustom,
+        eco: finalData.eco,
+        special: finalData.special,
+        drive: finalData.drive,
+        steer: finalData.steer,
+        brake: finalData.brake,
+        imageMimeType: formData.imageMimeType,
+        imageDataBase64: formData.imageDataBase64
+      });
+      const generatedImageUri = `data:${result.mimeType};base64,${result.data}`;
+      const newCandidates = [...candidateImages, generatedImageUri];
+      setCandidateImages(newCandidates);
+      setCurrentCandidateIndex(newCandidates.length - 1);
+      setGenerationCount(prev => prev + 1);
+      setStep(5);
+    } catch (err) {
+      setError("앗, 이미지를 만드는 중 문제가 생겼어요. 다시 시도해주세요.");
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // 학생이 선택한 이미지로 최종 결정하고 STEP 6 완성 단계로 이동
+  // 학생이 선택한 이미지로 최종 결정하고 STEP 6 완성 단계로 이동
+  const handleConfirmSelectedImage = (imageUri) => {
+    try {
+      const chosenImage = imageUri || candidateImages[currentCandidateIndex] || '';
+      if (!chosenImage) {
+        alert('선택된 이미지가 없습니다. 이미지를 다시 선택해 주세요.');
+        return;
+      }
+
+      const finalData = judgment === 'revise' ? { ...formData, ...revisedData } : { ...formData };
+
+      const summarizeText = (text, maxLength = 60) => {
+        const cleaned = String(text || '').trim();
+        if (!cleaned) return '';
+        if (cleaned.length <= maxLength) return cleaned;
+        const firstSentence = cleaned.split(/[.!?]\s/)[0];
+        if (firstSentence && firstSentence.length <= maxLength + 10) {
+          return firstSentence.endsWith('.') ? firstSentence : firstSentence + '.';
+        }
+        return cleaned.substring(0, maxLength) + '...';
+      };
+
+      const ecoPoints = String(finalData.eco || '')
+        .split(/[.!?\n]/)
+        .map(s => s.trim())
+        .filter(Boolean)
+        .slice(0, 3);
+
+      if (ecoPoints.length === 0) {
+        ecoPoints.push('친환경 에너지 활용');
+      }
+
+      const posterData = {
+        name: finalData.name || '',
+        designer: finalData.designer || '',
+        target: summarizeText(finalData.target, 50),
+        ecoPoints: ecoPoints.join('\n'),
+        special: finalData.special ? summarizeText(finalData.special, 50) : '',
+        drive: finalData.drive ? summarizeText(finalData.drive, 50) : '',
+        steer: finalData.steer ? summarizeText(finalData.steer, 50) : '',
+        brake: finalData.brake ? summarizeText(finalData.brake, 50) : '',
+      };
+
+      setSelectedImage(chosenImage);
+      setFinalImage(chosenImage);
+      setEditablePosterData(posterData);
+      setIsEditingPoster(false);
+      setError('');
+      setStep(6);
+
+      // 학생 기록은 비동기로 저장합니다. 화면 전환을 막지 않습니다.
+      setTimeout(() => {
+        saveRecordToLocal(posterData).catch?.(() => {});
+      }, 0);
+    } catch (err) {
+      console.error('최종 이미지 선택 처리 오류', err);
+      setError('완성 화면으로 이동하는 중 문제가 생겼어요. 다시 한 번 눌러 주세요.');
+    }
+  };
+
+  const currentPosterDataSafe = () => {
+    const finalData = judgment === 'revise' ? { ...formData, ...revisedData } : formData;
+    return editablePosterData || {
+      name: finalData.name || '', designer: finalData.designer || '', target: finalData.target || '',
+      ecoPoints: finalData.eco || '', special: finalData.special || '', drive: finalData.drive || '',
+      steer: finalData.steer || '', brake: finalData.brake || ''
+    };
+  };
+
+  const handleDownloadPoster = async () => {
+    if (!posterRef.current || !window.html2canvas) {
+      alert("포스터 저장 기능을 준비 중입니다. 잠시 후 다시 시도해주세요.");
+      return;
+    }
+    
+    setIsLoading(true);
+    setLoadingMessage("멋진 포스터를 이미지로 굽고 있어요...");
+    
+    try {
+      const canvas = await window.html2canvas(posterRef.current, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#f8fafc'
+      });
+      const image = canvas.toDataURL("image/png");
+      await saveRecordToLocal(editablePosterData || currentPosterDataSafe(), image);
+      const link = document.createElement('a');
+      link.href = image;
+      link.download = `${editablePosterData?.name || formData.name}_설계포스터.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (err) {
+      console.error("포스터 저장 실패:", err);
+      alert("포스터를 저장하는 데 문제가 발생했습니다. 브라우저 설정이나 용량 문제를 확인해주세요.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const renderStep1 = () => (
+    <div className="space-y-6">
+      <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-emerald-100">
+        <h2 className="text-xl font-bold text-emerald-800 mb-6 flex items-center">
+          <span className="bg-emerald-100 p-2 rounded-lg mr-3">✏️</span>
+          나의 친환경 수송수단 아이디어 스케치
+        </h2>
+        
+        <div className="space-y-5">
+          <div className="bg-emerald-50/50 p-5 rounded-xl border border-emerald-100 space-y-5">
+            <h3 className="font-bold text-emerald-700 text-lg border-b border-emerald-200 pb-2 mb-4">필수 항목</h3>
+            <div>
+              <label className="block text-gray-700 font-bold mb-2">① 수송수단 이름은?</label>
+              <input type="text" name="name" value={formData.name} onChange={handleInputChange}
+                className="w-full p-4 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 focus:ring-0 text-lg transition"
+                placeholder="예: 태양빛 씽씽카" />
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-bold mb-2">② 포스터에 표시될 나의 이름이나 별명은?</label>
+              <input type="text" name="designer" value={formData.designer} onChange={handleInputChange}
+                className="w-full p-4 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 focus:ring-0 text-lg transition"
+                placeholder="예: 김하늘 또는 초록 발명가 (비워두면 '미래 설계자'로 표시됩니다)" />
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-bold mb-2">③ 누구 또는 무엇을 어떻게 이동시키나요?</label>
+              <textarea name="target" value={formData.target} onChange={handleInputChange} rows="2"
+                className="w-full p-4 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 focus:ring-0 text-lg transition"
+                placeholder="예: 사람 4명을 태우고 도시 안을 이동해요." />
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-bold mb-3">④ 무엇의 힘으로 움직이나요? (복수 선택 가능)</label>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {['☀️ 태양 에너지', '⚡ 전기', '💧 수소', '🚲 사람의 힘', '🌬️ 바람', '♻️ 기타'].map(type => {
+                  const isSelected = formData.energies.includes(type);
+                  return (
+                    <button key={type} onClick={() => handleEnergyToggle(type)} type="button"
+                      className={`p-4 rounded-xl border-2 font-bold text-base md:text-lg transition-all
+                        ${isSelected ? 'bg-emerald-500 border-emerald-500 text-white shadow-md' : 'bg-white border-gray-200 text-gray-600 hover:border-emerald-300'}`}>
+                      {type}
+                    </button>
+                  );
+                })}
+              </div>
+              {formData.energies.includes('♻️ 기타') && (
+                <input type="text" name="energyCustom" value={formData.energyCustom} onChange={handleInputChange}
+                  className="w-full mt-3 p-4 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 focus:ring-0 text-lg"
+                  placeholder="어떤 힘으로 움직이는지 직접 적어주세요" />
+              )}
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-bold mb-2">⑤ 어떻게 환경을 보호하나요?</label>
+              <textarea name="eco" value={formData.eco} onChange={handleInputChange} rows="2"
+                className="w-full p-4 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 focus:ring-0 text-lg transition"
+                placeholder="예: 매연을 뿜지 않고, 공기를 깨끗하게 걸러내요." />
+            </div>
+
+            <div className="pt-4 border-t border-dashed border-emerald-200">
+              <label className="block text-gray-700 font-bold mb-2">⑥ 내가 생각한 모습을 보여 주세요</label>
+              <p className="text-sm text-gray-500 mb-4">종이에 그린 그림을 사진으로 찍어서 올려주세요. AI가 이 그림을 바탕으로 진짜처럼 만들어줍니다!</p>
+              
+              <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
+              
+              {!formData.imageSrc ? (
+                <button onClick={() => fileInputRef.current.click()} type="button"
+                  className="w-full py-10 border-2 border-dashed border-emerald-400 bg-white rounded-xl flex flex-col items-center justify-center text-emerald-700 hover:bg-emerald-50 transition">
+                  <span className="text-4xl mb-2">📸</span>
+                  <span className="font-bold text-lg">그림 사진 찍기 또는 파일 올리기</span>
+                </button>
+              ) : (
+                <div className="relative">
+                  <img src={formData.imageSrc} alt="학생 스케치" className="w-full max-h-64 object-contain rounded-xl border-2 border-emerald-200 bg-white" />
+                  <button onClick={() => setFormData(prev => ({ ...prev, imageSrc: null, imageMimeType: null, imageDataBase64: null }))} type="button"
+                    className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full shadow hover:bg-red-600">
+                    ✕ 다시 올리기
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 space-y-5 mt-8">
+            <div className="mb-2">
+              <h3 className="font-bold text-gray-800 text-xl flex items-center">
+                💡 더 자세히 생각해 볼까요? (선택)
+              </h3>
+              <p className="text-sm text-gray-500 mt-1">시간이 있거나 아이디어가 떠오르면 적어 보세요. 비워 두어도 다음 단계로 갈 수 있습니다.</p>
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-bold mb-2">✨ 특별한 기능</label>
+              <textarea name="special" value={formData.special} onChange={handleInputChange} rows="2"
+                className="w-full p-4 rounded-xl border-2 border-gray-200 focus:border-gray-400 focus:ring-0 text-base transition"
+                placeholder="예: 바퀴가 접히면서 좁은 골목도 다닐 수 있어요." />
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-bold mb-2">🔧 구동 장치</label>
+              <textarea name="drive" value={formData.drive} onChange={handleInputChange} rows="2"
+                className="w-full p-4 rounded-xl border-2 border-gray-200 focus:border-gray-400 focus:ring-0 text-base transition"
+                placeholder="예: 전기로 모터가 돌아가 바퀴를 움직여요." />
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-bold mb-2">🧭 조향 장치</label>
+              <textarea name="steer" value={formData.steer} onChange={handleInputChange} rows="2"
+                className="w-full p-4 rounded-xl border-2 border-gray-200 focus:border-gray-400 focus:ring-0 text-base transition"
+                placeholder="예: 핸들과 센서로 방향을 바꿔요." />
+            </div>
+
+            <div>
+              <label className="block text-gray-700 font-bold mb-2">🛑 제동 장치</label>
+              <textarea name="brake" value={formData.brake} onChange={handleInputChange} rows="2"
+                className="w-full p-4 rounded-xl border-2 border-gray-200 focus:border-gray-400 focus:ring-0 text-base transition"
+                placeholder="예: 브레이크를 누르면 바퀴가 멈춰요." />
+            </div>
+          </div>
+        </div>
+
+        <button onClick={requestAiFeedback} disabled={isLoading} type="button"
+          className="w-full mt-8 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xl py-5 rounded-2xl shadow-lg transition-transform active:scale-95 disabled:opacity-50 flex items-center justify-center">
+          {isLoading ? '로딩 중...' : '🤖 AI에게 내 설계 점검받기'}
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderStep2And3 = () => (
+    <div className="space-y-6">
+      <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-emerald-100">
+        <h2 className="text-xl font-bold text-emerald-800 mb-6 flex items-center">
+          <span className="bg-emerald-100 p-2 rounded-lg mr-3">🤖</span>
+          AI 설계 점검
+        </h2>
+        
+        <div className="space-y-4">
+          <div className="bg-blue-50 p-5 rounded-xl border border-blue-100">
+            <h3 className="font-bold text-blue-800 flex items-center mb-2">
+              <span className="text-xl mr-2">👍</span> AI가 찾은 훌륭한 점
+            </h3>
+            <p className="text-blue-900 text-lg">{aiFeedback?.compliment}</p>
+          </div>
+
+          <div className="bg-orange-50 p-5 rounded-xl border border-orange-100">
+            <h3 className="font-bold text-orange-800 flex items-center mb-2">
+              <span className="text-xl mr-2">💡</span> AI의 제안
+            </h3>
+            <p className="text-orange-900 text-lg">{aiFeedback?.suggestion}</p>
+          </div>
+        </div>
+      </div>
+
+      {step === 2 && (
+        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-emerald-100 animate-fade-in-up">
+          <h2 className="text-2xl font-extrabold text-gray-800 mb-6">🤔 AI의 조언을 보고 내 설계를 더 추가하거나 고치고 싶은가요?</h2>
+          
+          <div className="flex flex-col md:flex-row gap-4">
+            <button onClick={() => { setJudgment('keep'); setStep(3); }} type="button"
+              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold text-lg py-6 rounded-2xl border-2 border-gray-300 transition-transform active:scale-95">
+              🙋 지금 생각 그대로 갈래요
+            </button>
+            <button onClick={() => { 
+                setJudgment('revise'); 
+                setRevisedData({
+                  eco: formData.eco || '',
+                  special: formData.special || '',
+                  drive: formData.drive || '',
+                  steer: formData.steer || '',
+                  brake: formData.brake || ''
+                });
+                setStep(3); 
+              }} type="button"
+              className="flex-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-bold text-lg py-6 rounded-2xl border-2 border-emerald-300 transition-transform active:scale-95">
+              ✏️ 더 추가하거나 수정할래요
+            </button>
+          </div>
+        </div>
+      )}
+
+      {step === 3 && judgment === 'keep' && (
+        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-emerald-100 animate-fade-in-up">
+          <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center">
+            <span className="bg-gray-200 p-2 rounded-lg mr-3">🙋</span>나의 판단
+          </h2>
+          <p className="text-lg text-gray-700 bg-gray-50 p-5 rounded-xl font-medium mb-8 text-center">
+            "AI의 의견을 참고했지만, 나는 처음 생각을 그대로 사용하기로 했어요."
+          </p>
+            
+          <button onClick={() => setStep(4)} type="button"
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xl py-5 rounded-2xl shadow-lg transition-transform active:scale-95">
+            최종 설계 확인하기 ➡️
+          </button>
+        </div>
+      )}
+
+      {step === 3 && judgment === 'revise' && (
+        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-emerald-100 animate-fade-in-up">
+          <h2 className="text-2xl font-bold text-emerald-800 mb-6 flex items-center">
+            <span className="bg-emerald-100 p-2 rounded-lg mr-3">✏️</span>내 설계를 조금 더 발전시켜 봅시다.
+          </h2>
+          
+          <div className="bg-orange-50 p-4 rounded-xl mb-8 border border-orange-100">
+            <span className="font-bold text-orange-800 block mb-1">💡 AI의 제안:</span>
+            <span className="text-orange-900">{aiFeedback?.suggestion}</span>
+          </div>
+          
+          <div className="space-y-6 mb-8">
+            <p className="text-gray-500 text-sm mb-2">원하는 항목만 수정하거나 추가하면 됩니다.</p>
+            
+            <div>
+              <label className="block text-emerald-700 font-bold mb-2">🌱 환경을 보호하는 방법</label>
+              <textarea value={revisedData.eco} onChange={(e) => setRevisedData({...revisedData, eco: e.target.value})} rows="2"
+                className="w-full p-4 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 focus:ring-0 text-base" />
+            </div>
+
+            <div>
+              <label className="block text-emerald-700 font-bold mb-2">✨ 특별한 기능</label>
+              <textarea value={revisedData.special} onChange={(e) => setRevisedData({...revisedData, special: e.target.value})} rows="2"
+                className="w-full p-4 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 focus:ring-0 text-base" />
+            </div>
+
+            <div>
+              <label className="block text-emerald-700 font-bold mb-2">🔧 구동 장치 <span className="text-gray-500 font-normal text-sm ml-1">내 수송수단은 어떻게 움직이나요?</span></label>
+              <textarea value={revisedData.drive} onChange={(e) => setRevisedData({...revisedData, drive: e.target.value})} rows="2"
+                className="w-full p-4 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 focus:ring-0 text-base" />
+            </div>
+
+            <div>
+              <label className="block text-emerald-700 font-bold mb-2">🧭 조향 장치 <span className="text-gray-500 font-normal text-sm ml-1">어떻게 방향을 바꾸나요?</span></label>
+              <textarea value={revisedData.steer} onChange={(e) => setRevisedData({...revisedData, steer: e.target.value})} rows="2"
+                className="w-full p-4 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 focus:ring-0 text-base" />
+            </div>
+
+            <div>
+              <label className="block text-emerald-700 font-bold mb-2">🛑 제동 장치 <span className="text-gray-500 font-normal text-sm ml-1">어떻게 멈추나요?</span></label>
+              <textarea value={revisedData.brake} onChange={(e) => setRevisedData({...revisedData, brake: e.target.value})} rows="2"
+                className="w-full p-4 rounded-xl border-2 border-emerald-200 focus:border-emerald-500 focus:ring-0 text-base" />
+            </div>
+          </div>
+
+          <button onClick={() => setStep(4)} type="button"
+            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-xl py-5 rounded-2xl shadow-lg transition-transform active:scale-95 flex items-center justify-center">
+            ✅ 수정 완료하고 다음으로 ➡️
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderStep4 = () => {
+    const finalData = judgment === 'revise' ? { ...formData, ...revisedData } : formData;
+    const isRevised = judgment === 'revise';
+    const finalEnergyStr = finalData.energies.includes('♻️ 기타') 
+      ? [...finalData.energies.filter(e => e !== '♻️ 기타'), finalData.energyCustom].join(', ') 
+      : finalData.energies.join(', ');
+
+    return (
+      <div className="space-y-6">
+        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border-2 border-emerald-400">
+          <h2 className="text-2xl font-extrabold text-emerald-800 mb-6 flex items-center justify-center border-b pb-4">
+            <span className="mr-2">🌱</span>나의 최종 친환경 수송수단 설계
+          </h2>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div className="space-y-4">
+              <div className="bg-gray-50 p-4 rounded-xl">
+                <span className="text-sm font-bold text-gray-500 block mb-1">🚗 이름</span>
+                <span className="text-lg font-bold text-gray-800">{finalData.name}</span>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-xl">
+                <span className="text-sm font-bold text-gray-500 block mb-1">👤 설계자 이름</span>
+                <span className="text-lg font-bold text-gray-800">{finalData.designer.trim() !== '' ? finalData.designer : '미래 설계자'}</span>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-xl">
+                <span className="text-sm font-bold text-gray-500 block mb-1">👥 이동 대상 및 방법</span>
+                <span className="text-lg text-gray-800">{finalData.target}</span>
+              </div>
+              <div className="bg-gray-50 p-4 rounded-xl">
+                <span className="text-sm font-bold text-gray-500 block mb-1">⚡ 사용하는 에너지</span>
+                <span className="text-lg font-bold text-blue-600">{finalEnergyStr}</span>
+              </div>
+              <div className={`p-4 rounded-xl border-2 ${isRevised ? 'border-emerald-400 bg-emerald-50' : 'bg-gray-50 border-transparent'}`}>
+                <span className="text-sm font-bold text-gray-500 block mb-1">
+                  🌱 환경을 보호하는 방법 {isRevised && <span className="text-emerald-600 text-xs ml-2">(수정됨)</span>}
+                </span>
+                <span className="text-lg text-gray-800">{finalData.eco}</span>
+              </div>
+              
+              {finalData.special && finalData.special.trim() !== '' && (
+                <div className={`p-4 rounded-xl border-2 ${isRevised ? 'border-emerald-400 bg-emerald-50' : 'bg-gray-50 border-transparent'}`}>
+                  <span className="text-sm font-bold text-gray-500 block mb-1">✨ 특별한 기능 {isRevised && <span className="text-emerald-600 text-xs ml-2">(수정됨)</span>}</span>
+                  <span className="text-lg text-gray-800">{finalData.special}</span>
+                </div>
+              )}
+              {finalData.drive && finalData.drive.trim() !== '' && (
+                <div className={`p-4 rounded-xl border-2 ${isRevised ? 'border-emerald-400 bg-emerald-50' : 'bg-gray-50 border-transparent'}`}>
+                  <span className="text-sm font-bold text-gray-500 block mb-1">🔧 구동 장치 {isRevised && <span className="text-emerald-600 text-xs ml-2">(수정됨)</span>}</span>
+                  <span className="text-lg text-gray-800">{finalData.drive}</span>
+                </div>
+              )}
+              {finalData.steer && finalData.steer.trim() !== '' && (
+                <div className={`p-4 rounded-xl border-2 ${isRevised ? 'border-emerald-400 bg-emerald-50' : 'bg-gray-50 border-transparent'}`}>
+                  <span className="text-sm font-bold text-gray-500 block mb-1">🧭 조향 장치 {isRevised && <span className="text-emerald-600 text-xs ml-2">(수정됨)</span>}</span>
+                  <span className="text-lg text-gray-800">{finalData.steer}</span>
+                </div>
+              )}
+              {finalData.brake && finalData.brake.trim() !== '' && (
+                <div className={`p-4 rounded-xl border-2 ${isRevised ? 'border-emerald-400 bg-emerald-50' : 'bg-gray-50 border-transparent'}`}>
+                  <span className="text-sm font-bold text-gray-500 block mb-1">🛑 제동 장치 {isRevised && <span className="text-emerald-600 text-xs ml-2">(수정됨)</span>}</span>
+                  <span className="text-lg text-gray-800">{finalData.brake}</span>
+                </div>
+              )}
+            </div>
+            
+            <div className="flex flex-col">
+              <span className="text-sm font-bold text-gray-500 block mb-2">내가 그린 스케치</span>
+              <img src={finalData.imageSrc} alt="학생 스케치" className="w-full h-auto rounded-xl border-2 border-gray-200 shadow-inner flex-grow object-contain bg-white p-2" />
+              
+              <div className="mt-4 p-4 bg-blue-50 rounded-xl text-sm text-blue-800">
+                <span className="font-bold">과정 요약:</span> AI 제안에 대해 
+                <strong> {judgment === 'keep' ? '내 생각을 유지' : '의견을 반영하여 추가/수정'}</strong>했습니다.
+              </div>
+            </div>
+          </div>
+
+          <button onClick={() => {
+            if (candidateImages.length === 0) {
+              requestImageGeneration();
+            } else {
+              setStep(5);
+            }
+          }} type="button"
+            className="w-full mt-8 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-xl py-6 rounded-2xl shadow-xl transition-transform active:scale-95 flex items-center justify-center">
+            <span className="flex items-center">
+              <span className="text-3xl mr-3">✨</span> {candidateImages.length === 0 ? '내 수송수단 진짜처럼 실물화하기' : '실물화 결과 확인하기'}
+            </span>
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  // 새로운 STEP 5: 실물화 이미지 생성, 후보 비교, 최대 2회 생성 및 최종 선택 단계
+  const renderStep5 = () => {
+    return (
+      <div className="space-y-6 animate-fade-in-up">
+        <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border-2 border-purple-300">
+          <div className="flex flex-col md:flex-row items-center justify-between border-b pb-4 mb-6 gap-4">
+            <div>
+              <h2 className="text-2xl font-extrabold text-purple-900 flex items-center">
+                <span className="bg-purple-100 p-2 rounded-xl mr-3">✨</span> 5단계: 실물화 결과 확인 및 선택
+              </h2>
+              <p className="text-gray-600 text-sm mt-1">
+                실물화 결과를 확인해 보세요. 마음에 들면 이 이미지를 선택하고, 아니면 다시 생성할 수 있습니다.
+              </p>
+            </div>
+            <div className="bg-purple-50 px-4 py-2 rounded-xl border border-purple-200 text-purple-800 font-bold text-sm">
+              생성 기회: <span className="text-lg font-extrabold text-purple-600">{generationCount} / 2</span>회 사용
+            </div>
+          </div>
+
+          {candidateImages.length === 0 ? (
+            <div className="text-center py-12 space-y-4">
+              <div className="text-5xl">🎨</div>
+              <p className="text-lg font-bold text-gray-700">아직 생성된 실물화 이미지가 없습니다.</p>
+              <p className="text-sm text-gray-500">버튼을 눌러 첫 번째 실물화 이미지를 만들어보세요!</p>
+              <button onClick={requestImageGeneration} disabled={isLoading} type="button"
+                className="mt-4 bg-purple-600 hover:bg-purple-700 text-white font-extrabold text-lg py-4 px-8 rounded-2xl shadow-lg transition active:scale-95">
+                ✨ 첫 번째 실물화 이미지 생성하기
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* 후보 이미지 뷰어 */}
+              <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 flex flex-col items-center">
+                <div className="w-full flex items-center justify-between mb-4">
+                  <span className="bg-purple-600 text-white font-extrabold px-3 py-1 rounded-full text-sm">
+                    후보 이미지 {currentCandidateIndex + 1} / {candidateImages.length}
+                  </span>
+                  {candidateImages.length > 1 && (
+                    <div className="flex gap-2">
+                      <button 
+                        onClick={() => setCurrentCandidateIndex(prev => Math.max(0, prev - 1))}
+                        disabled={currentCandidateIndex === 0}
+                        type="button"
+                        className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg font-bold text-sm text-gray-700 disabled:opacity-40 hover:bg-gray-100 transition">
+                        ◀ 이전 이미지
+                      </button>
+                      <button 
+                        onClick={() => setCurrentCandidateIndex(prev => Math.min(candidateImages.length - 1, prev + 1))}
+                        disabled={currentCandidateIndex === candidateImages.length - 1}
+                        type="button"
+                        className="px-3 py-1.5 bg-white border border-gray-300 rounded-lg font-bold text-sm text-gray-700 disabled:opacity-40 hover:bg-gray-100 transition">
+                        다음 이미지 ▶
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="w-full max-w-xl h-[380px] bg-white rounded-xl shadow-inner border border-gray-200 p-3 flex items-center justify-center overflow-hidden">
+                  <img 
+                    src={candidateImages[currentCandidateIndex]} 
+                    alt={`후보 ${currentCandidateIndex + 1}`} 
+                    className="w-full h-full object-contain rounded-lg" 
+                  />
+                </div>
+
+                {/* 썸네일 미리보기 바 */}
+                <div className="flex gap-3 mt-4">
+                  {candidateImages.map((img, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentCandidateIndex(idx)}
+                      type="button"
+                      className={`w-16 h-16 rounded-lg border-2 overflow-hidden transition-all ${currentCandidateIndex === idx ? 'border-purple-600 ring-2 ring-purple-300 scale-105' : 'border-gray-300 opacity-60 hover:opacity-100'}`}
+                    >
+                      <img src={img} alt={`썸네일 ${idx + 1}`} className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 액션 버튼 그룹 */}
+              <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-gray-200">
+                <button 
+                  onClick={() => handleConfirmSelectedImage(candidateImages[currentCandidateIndex])}
+                  type="button"
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold text-lg py-5 px-6 rounded-2xl shadow-lg transition active:scale-95 flex items-center justify-center">
+                  <span className="text-2xl mr-2">✅</span> 이 이미지로 결정하기
+                </button>
+
+                {generationCount < 2 ? (
+                  <button 
+                    onClick={requestImageGeneration} 
+                    disabled={isLoading}
+                    type="button"
+                    className="flex-1 bg-purple-100 hover:bg-purple-200 text-purple-800 border-2 border-purple-300 font-extrabold text-lg py-5 px-6 rounded-2xl shadow-sm transition active:scale-95 flex items-center justify-center">
+                    <span className="text-2xl mr-2">🔄</span> 다시 생성하기 ({2 - generationCount}회 남음)
+                  </button>
+                ) : (
+                  <div className="flex-1 bg-gray-100 border-2 border-gray-300 text-gray-500 font-bold text-center py-4 px-6 rounded-2xl flex items-center justify-center text-sm">
+                    생성 기회를 모두 사용했어요. 마음에 드는 이미지를 선택해 주세요!
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderStep6 = () => {
+    const finalData = judgment === 'revise' ? { ...formData, ...revisedData } : formData;
+    const currentPosterData = editablePosterData || {
+      name: finalData.name,
+      designer: finalData.designer,
+      target: finalData.target,
+      ecoPoints: finalData.eco,
+      special: finalData.special || '',
+      drive: finalData.drive || '',
+      steer: finalData.steer || '',
+      brake: finalData.brake || '',
+    };
+
+    const designerName = currentPosterData.designer.trim() !== '' ? currentPosterData.designer : '미래 설계자';
+    const ecoPointsList = currentPosterData.ecoPoints.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+
+    const energyIcons = finalData.energies.map(e => {
+      if (e.includes('태양')) return '☀️';
+      if (e.includes('전기')) return '⚡';
+      if (e.includes('수소')) return '💧';
+      if (e.includes('사람')) return '🚲';
+      if (e.includes('바람')) return '🌬️';
+      return '♻️';
+    }).join('');
+
+    const energyNames = finalData.energies.includes('♻️ 기타')
+      ? [...finalData.energies.filter(e => e !== '♻️ 기타'), finalData.energyCustom].join(' + ')
+      : finalData.energies.join(' + ');
+
+    return (
+      <div className="space-y-8 animate-fade-in-up">
+        <div className="text-center mb-6">
+          <h2 className="text-3xl md:text-4xl font-extrabold text-emerald-800">🎉 설계 포스터가 완성되었어요!</h2>
+          <p className="text-gray-600 mt-2 text-lg">아래 버튼을 눌러 포스터 내용을 수정하거나 저장한 뒤, 패들렛 전시회에 올려주세요.</p>
+          
+          <div className="flex flex-col sm:flex-row justify-center gap-4 mt-6 max-w-xl mx-auto px-4">
+            {!isEditingPoster ? (
+              <button onClick={() => setIsEditingPoster(true)} type="button"
+                className="flex-1 flex items-center justify-center py-4 px-6 bg-amber-500 hover:bg-amber-600 text-white rounded-2xl transition-transform shadow-md font-extrabold text-lg active:scale-95">
+                <span className="text-2xl mr-2">✏️</span> 포스터 글 수정하기
+              </button>
+            ) : (
+              <button onClick={() => setIsEditingPoster(false)} type="button"
+                className="flex-1 flex items-center justify-center py-4 px-6 bg-gray-500 hover:bg-gray-600 text-white rounded-2xl transition-transform shadow-md font-extrabold text-lg active:scale-95">
+                <span className="text-2xl mr-2">↩️</span> 수정 취소하고 돌아가기
+              </button>
+            )}
+
+            <button onClick={handleDownloadPoster} type="button"
+              className="flex-1 flex items-center justify-center py-4 px-6 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl transition-transform shadow-md font-extrabold text-lg active:scale-95 border border-emerald-700">
+              <span className="text-2xl mr-2">🖼️</span> 설계 포스터 저장하기
+            </button>
+          </div>
+        </div>
+
+        {isEditingPoster ? (
+          <div className="max-w-3xl mx-auto bg-white p-8 rounded-3xl shadow-xl border-2 border-amber-300 space-y-6 animate-fade-in-up">
+            <div className="border-b border-gray-200 pb-4 flex items-center justify-between">
+              <h3 className="text-2xl font-black text-amber-800 flex items-center">
+                <span className="bg-amber-100 p-2 rounded-xl mr-3">✏️</span> 포스터에 들어갈 텍스트 직접 수정하기
+              </h3>
+              <span className="text-xs bg-amber-100 text-amber-800 font-bold px-3 py-1 rounded-full">학생 자유 편집</span>
+            </div>
+
+            <p className="text-gray-600 text-sm">
+              AI가 요약한 문구나 기존 작성 내용을 바탕으로, 포스터에 가장 어울리는 멋진 문장으로 자유롭게 고쳐보세요!
+            </p>
+
+            <div className="space-y-5">
+              <div>
+                <label className="block text-gray-700 font-bold mb-2">🚗 수송수단 이름</label>
+                <input type="text" 
+                  value={currentPosterData.name} 
+                  onChange={(e) => setEditablePosterData({...currentPosterData, name: e.target.value})}
+                  className="w-full p-4 rounded-xl border-2 border-amber-200 focus:border-amber-500 focus:ring-0 text-lg font-bold" />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-bold mb-2">👤 학생 이름 또는 별명</label>
+                <input type="text" 
+                  value={currentPosterData.designer} 
+                  onChange={(e) => setEditablePosterData({...currentPosterData, designer: e.target.value})}
+                  className="w-full p-4 rounded-xl border-2 border-amber-200 focus:border-amber-500 focus:ring-0 text-lg font-bold" />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-bold mb-2">👥 이동 대상 및 방법</label>
+                <textarea rows="2" 
+                  value={currentPosterData.target} 
+                  onChange={(e) => setEditablePosterData({...currentPosterData, target: e.target.value})}
+                  className="w-full p-4 rounded-xl border-2 border-amber-200 focus:border-amber-500 focus:ring-0 text-base" />
+              </div>
+
+              <div>
+                <label className="block text-gray-700 font-bold mb-2">🌱 핵심 친환경 기능 (여러 줄 입력 가능)</label>
+                <textarea rows="3" 
+                  value={currentPosterData.ecoPoints} 
+                  onChange={(e) => setEditablePosterData({...currentPosterData, ecoPoints: e.target.value})}
+                  className="w-full p-4 rounded-xl border-2 border-amber-200 focus:border-amber-500 focus:ring-0 text-base" />
+                <p className="text-xs text-gray-400 mt-1">줄바꿈을 통해 여러 개의 친환경 기능을 구분할 수 있습니다.</p>
+              </div>
+
+              <div>
+                  <label className="block text-gray-700 font-bold mb-2">✨ 특별한 기능</label>
+                  <textarea rows="2" 
+                    value={currentPosterData.special} 
+                    onChange={(e) => setEditablePosterData({...currentPosterData, special: e.target.value})}
+                    className="w-full p-4 rounded-xl border-2 border-amber-200 focus:border-amber-500 focus:ring-0 text-base" />
+                </div>
+
+              <div>
+                  <label className="block text-gray-700 font-bold mb-2">🔧 구동 장치</label>
+                  <textarea rows="2" 
+                    value={currentPosterData.drive} 
+                    onChange={(e) => setEditablePosterData({...currentPosterData, drive: e.target.value})}
+                    className="w-full p-4 rounded-xl border-2 border-amber-200 focus:border-amber-500 focus:ring-0 text-base" />
+                </div>
+
+              <div>
+                  <label className="block text-gray-700 font-bold mb-2">🧭 조향 장치</label>
+                  <textarea rows="2" 
+                    value={currentPosterData.steer} 
+                    onChange={(e) => setEditablePosterData({...currentPosterData, steer: e.target.value})}
+                    className="w-full p-4 rounded-xl border-2 border-amber-200 focus:border-amber-500 focus:ring-0 text-base" />
+                </div>
+
+              <div>
+                  <label className="block text-gray-700 font-bold mb-2">🛑 제동 장치</label>
+                  <textarea rows="2" 
+                    value={currentPosterData.brake} 
+                    onChange={(e) => setEditablePosterData({...currentPosterData, brake: e.target.value})}
+                    className="w-full p-4 rounded-xl border-2 border-amber-200 focus:border-amber-500 focus:ring-0 text-base" />
+                </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4 pt-4 border-t border-gray-200">
+              <button onClick={() => setIsEditingPoster(false)} type="button"
+                className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-800 font-bold py-4 rounded-xl text-lg transition">
+                ↩️ 수정하지 않고 돌아가기
+              </button>
+              <button onClick={() => {
+                setIsEditingPoster(false);
+                saveRecordToLocal(currentPosterData);
+              }} type="button"
+                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold py-4 rounded-xl text-lg shadow-md transition">
+                ✅ 수정한 내용으로 포스터 다시 보기
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {/* 세로형 포스터 영역 (학생이 직접 선택한 selectedImage 사용) */}
+        <div className="w-full overflow-x-auto pb-4 custom-scrollbar">
+          <div className="min-w-[900px] max-w-[960px] mx-auto flex justify-center p-4">
+            <div 
+              ref={posterRef}
+              className="bg-slate-50 w-[900px] p-10 rounded-xl shadow-2xl border border-gray-200 flex flex-col gap-6 relative"
+            >
+              {/* [상단 제목 영역] */}
+              <div className="border-b-4 border-emerald-500 pb-5 flex flex-col gap-3">
+                <div className="bg-emerald-100 text-emerald-800 font-extrabold px-4 py-1.5 rounded-full text-base self-start shadow-xs">
+                  우리의 미래를 바꾸는 친환경 수송수단 설계 포스터
+                </div>
+                <div className="flex justify-between items-end">
+                  <h1 className="text-5xl font-black text-gray-900 tracking-tight">
+                    {currentPosterData.name}
+                  </h1>
+                  <div className="text-right">
+                    <div className="text-gray-500 font-extrabold text-xs tracking-wider">DESIGNED BY</div>
+                    <div className="text-2xl font-black text-emerald-700 border-b-2 border-emerald-700 px-3 py-0.5 inline-block mt-1">
+                      {designerName}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* [이미지 영역] 학생이 직접 선택한 실물화 이미지와 원본 스케치 좌우 배치 */}
+              <div className="grid grid-cols-2 gap-6">
+                {/* 학생이 최종 선택한 실물화 이미지 */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col">
+                  <div className="text-emerald-800 font-extrabold text-lg mb-3 flex items-center justify-center bg-emerald-50 py-2 rounded-lg border border-emerald-100">
+                    ✨ 내가 선택한 실물화 모델
+                  </div>
+                  <div className="h-[340px] bg-white rounded-lg flex items-center justify-center overflow-hidden">
+                    <img src={selectedImage || finalImage} alt="학생 선택 실물화 모델" className="w-full h-full object-contain rounded-md" />
+                  </div>
+                </div>
+
+                {/* 학생이 업로드한 원본 그림 */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex flex-col">
+                  <div className="text-emerald-800 font-extrabold text-lg mb-3 flex items-center justify-center bg-emerald-50 py-2 rounded-lg border border-emerald-100">
+                    ✏️ 내가 처음 그린 스케치
+                  </div>
+                  <div className="h-[340px] bg-white rounded-lg flex items-center justify-center overflow-hidden p-2">
+                    <img src={finalData.imageSrc} alt="스케치 원본" className="w-full h-full object-contain rounded-md filter drop-shadow-sm" />
+                  </div>
+                </div>
+              </div>
+
+              {/* [이미지 아래 정보 영역] 포스터 전체 너비를 활용하는 큰 박스 형태의 정보 정리 */}
+              <div className="flex flex-col gap-6">
+                
+                {/* 첫 번째: 설계 기본 정보 (좌우 2칸형) */}
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                  <h3 className="font-extrabold text-2xl text-gray-900 mb-4 border-b border-gray-100 pb-2 flex items-center">
+                    <span className="mr-2">📋</span> 설계 기본 정보
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100">
+                      <span className="text-sm font-extrabold text-emerald-700 bg-emerald-100 px-3 py-1 rounded-md inline-block mb-2 shadow-xs">⚡ 사용하는 에너지</span>
+                      <div className="font-extrabold text-gray-900 text-xl pl-1">{energyIcons} {energyNames}</div>
+                    </div>
+                    <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                      <span className="text-sm font-extrabold text-blue-700 bg-blue-100 px-3 py-1 rounded-md inline-block mb-2 shadow-xs">👥 이동 대상 및 방법</span>
+                      <div className="font-bold text-gray-900 text-lg leading-relaxed pl-1 break-keep">
+                        {currentPosterData.target}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 두 번째: 핵심 친환경 기능 */}
+                <div className="bg-emerald-50 rounded-xl shadow-sm border border-emerald-200 p-6">
+                  <h3 className="font-extrabold text-2xl text-emerald-900 mb-4 border-b border-emerald-200 pb-2 flex items-center">
+                    <span className="mr-2">🌱</span> 핵심 친환경 기능
+                  </h3>
+                  <ul className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    {ecoPointsList.map((point, i) => (
+                      <li key={i} className="flex items-start bg-white p-3.5 rounded-lg border border-emerald-100 shadow-xs">
+                        <span className="text-emerald-600 mr-2 text-xl font-bold flex-shrink-0">🌿</span>
+                        <span className="text-gray-900 font-bold text-lg leading-snug break-keep">
+                          {point}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* 세 번째: 세부 설계 */}
+                {(currentPosterData.special || currentPosterData.drive || currentPosterData.steer || currentPosterData.brake) && (
+                  <div className="bg-orange-50 rounded-xl shadow-sm border border-orange-200 p-6">
+                    <h3 className="font-extrabold text-2xl text-orange-900 mb-4 border-b border-orange-200 pb-2 flex items-center">
+                      <span className="mr-2">⚙️</span> 세부 설계
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {currentPosterData.special && (
+                        <div className="bg-white p-4 rounded-lg border border-orange-200 shadow-xs">
+                          <span className="font-extrabold text-orange-800 text-lg block mb-1">✨ 특별한 기능</span>
+                          <span className="text-gray-900 font-bold text-base leading-relaxed break-keep">{currentPosterData.special}</span>
+                        </div>
+                      )}
+                      {currentPosterData.drive && (
+                        <div className="bg-white p-4 rounded-lg border border-orange-200 shadow-xs">
+                          <span className="font-extrabold text-orange-800 text-lg block mb-1">🔧 구동 장치</span>
+                          <span className="text-gray-900 font-bold text-base leading-relaxed break-keep">{currentPosterData.drive}</span>
+                        </div>
+                      )}
+                      {currentPosterData.steer && (
+                        <div className="bg-white p-4 rounded-lg border border-orange-200 shadow-xs">
+                          <span className="font-extrabold text-orange-800 text-lg block mb-1">🧭 조향 장치</span>
+                          <span className="text-gray-900 font-bold text-base leading-relaxed break-keep">{currentPosterData.steer}</span>
+                        </div>
+                      )}
+                      {currentPosterData.brake && (
+                        <div className="bg-white p-4 rounded-lg border border-orange-200 shadow-xs">
+                          <span className="font-extrabold text-orange-800 text-lg block mb-1">🛑 제동 장치</span>
+                          <span className="text-gray-900 font-bold text-base leading-relaxed break-keep">{currentPosterData.brake}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="max-w-2xl mx-auto space-y-4 px-4 pt-4">
+          <button onClick={handleDownloadPoster} type="button"
+            className="w-full flex items-center justify-center py-5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl transition-transform shadow-lg font-extrabold text-xl active:scale-95 border border-emerald-700">
+            <span className="text-3xl mr-3">🖼️</span> 설계 포스터 저장하기
+          </button>
+          
+          <a href={padletUrl && !padletUrl.includes("your-padlet-url") ? padletUrl : "#"} target="_blank" rel="noreferrer"
+            className="flex items-center justify-center w-full bg-gray-800 hover:bg-gray-900 text-white font-extrabold text-xl py-5 px-4 rounded-2xl shadow-lg transition-transform active:scale-95 border border-gray-900">
+            <span className="text-3xl mr-3">🌎</span> 우리 반 미래 수송수단 전시회로 이동
+          </a>
+        </div>
+        
+        <div className="text-center pt-8 pb-4">
+          <button onClick={() => window.location.reload()} type="button" className="text-gray-400 font-bold underline hover:text-gray-600 transition-colors">
+            처음부터 다시 시작하기
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const TeacherDashboard = () => {
+    const completedCount = savedRecords.filter(r => r.status === '완료').length;
+    
+    return (
+      <div className="bg-white p-6 md:p-8 rounded-3xl shadow-lg border-4 border-indigo-100 min-h-[80vh]">
+        <div className="flex flex-col md:flex-row justify-between items-center mb-8 border-b-2 border-indigo-50 pb-6 gap-4">
+          <h2 className="text-3xl font-black text-indigo-900 flex items-center">
+            <span className="text-4xl mr-3">🌱</span> 친환경 수송수단 활동 관리
+          </h2>
+          <button 
+            onClick={() => { setIsTeacherMode(false); setTeacherToken(''); }}
+            className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-6 py-3 rounded-xl font-bold transition shadow-sm"
+          >
+            학생 화면으로 돌아가기
+          </button>
+        </div>
+        
+        <div className="flex gap-4 mb-8">
+          <div className="bg-indigo-50 px-8 py-5 rounded-2xl flex-1 border border-indigo-200 shadow-sm">
+            <span className="text-indigo-600 text-base font-bold block mb-1">전체 기록</span>
+            <span className="text-4xl font-black text-indigo-900">{savedRecords.length}<span className="text-xl ml-1">명</span></span>
+          </div>
+          <div className="bg-emerald-50 px-8 py-5 rounded-2xl flex-1 border border-emerald-200 shadow-sm">
+            <span className="text-emerald-600 text-base font-bold block mb-1">완료</span>
+            <span className="text-4xl font-black text-emerald-900">{completedCount}<span className="text-xl ml-1">명</span></span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 mb-12">
+          {savedRecords.map(record => (
+            <div key={record.id} className="bg-white border-2 border-gray-100 rounded-2xl p-6 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all">
+              <div className="flex justify-between items-start mb-4">
+                <h3 className="font-extrabold text-xl text-gray-800">{record.studentName}</h3>
+                <span className="bg-emerald-100 text-emerald-800 text-sm font-extrabold px-3 py-1 rounded-full">{record.status}</span>
+              </div>
+              <p className="text-gray-700 font-bold mb-2">🚗 {record.vehicleName || '이름 없음'}</p>
+              <p className="text-gray-400 text-sm mb-6 font-medium">저장: {record.timestamp ? new Date(record.timestamp).toLocaleString() : '-'}</p>
+              
+              <div className="flex gap-3 border-t border-gray-100 pt-5">
+                <button 
+                  onClick={async () => { try { setIsLoading(true); setLoadingMessage('학생 작품을 불러오는 중입니다...'); const detail = await serverCall('getStudentRecordDetail', record.id, teacherToken); setViewingRecord(detail); } catch(e) { alert(e.message); } finally { setIsLoading(false); } }}
+                  className="flex-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-extrabold py-3 rounded-xl text-sm transition"
+                >
+                  작품 보기
+                </button>
+                <button 
+                  onClick={() => setDeleteTargetId(record.id)}
+                  className="flex-1 bg-red-50 hover:bg-red-100 text-red-700 font-extrabold py-3 rounded-xl text-sm transition"
+                >
+                  기록 삭제
+                </button>
+              </div>
+            </div>
+          ))}
+          {savedRecords.length === 0 && (
+            <div className="col-span-full text-center py-20 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200">
+              <div className="text-4xl mb-4">📭</div>
+              <p className="text-xl font-bold text-gray-500">아직 저장된 학생 활동 기록이 없습니다.</p>
+            </div>
+          )}
+        </div>
+
+        {savedRecords.length > 0 && (
+          <div className="border-t-2 border-gray-100 pt-8 text-center">
+            <button 
+              onClick={() => setClearAllConfirmStep(1)}
+              className="bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 font-extrabold px-8 py-4 rounded-2xl transition shadow-sm text-lg"
+            >
+              ⚠️ 전체 기록 초기화
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderTeacherModals = () => {
+    return (
+      <>
+        {showTeacherLogin && (
+          <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl animate-fade-in-up border-2 border-indigo-200">
+              <h3 className="text-2xl font-black text-gray-800 mb-2 flex items-center justify-center">
+                <span className="mr-2">🔒</span> 교사 모드
+              </h3>
+              <p className="text-gray-500 mb-6 text-center text-sm font-medium">교사 비밀번호를 입력하세요.</p>
+              <input 
+                type="password"
+                value={teacherPassword}
+                onChange={e => setTeacherPassword(e.target.value)}
+                onKeyDown={async e => {
+                  if (e.key === 'Enter') {
+                    try { const auth = await serverCall('verifyTeacherPassword', teacherPassword); if (auth?.ok) { setTeacherToken(auth.token); setIsTeacherMode(true); setShowTeacherLogin(false); setTeacherPassword(''); await loadRecords(auth.token); } else { setTeacherPassword(''); alert('비밀번호가 올바르지 않습니다.'); } } catch(e) { alert(e.message); }
+                  }
+                }}
+                className="w-full p-4 text-center text-2xl tracking-widest rounded-xl border-2 border-gray-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 mb-6 font-bold"
+                placeholder="****"
+                autoFocus
+              />
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => {
+                    setShowTeacherLogin(false);
+                    setTeacherPassword('');
+                  }}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-extrabold py-4 rounded-xl transition"
+                >
+                  취소
+                </button>
+                <button 
+                  onClick={async () => {
+                    try { const auth = await serverCall('verifyTeacherPassword', teacherPassword); if (auth?.ok) { setTeacherToken(auth.token); setIsTeacherMode(true); setShowTeacherLogin(false); setTeacherPassword(''); await loadRecords(auth.token); } else { setTeacherPassword(''); alert('비밀번호가 올바르지 않습니다.'); } } catch(e) { alert(e.message); }
+                  }}
+                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold py-4 rounded-xl shadow-md transition"
+                >
+                  확인
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {deleteTargetId && (
+          <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl animate-fade-in-up">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">🗑️</div>
+              <h3 className="text-xl font-black text-center text-gray-900 mb-2">기록 삭제</h3>
+              <p className="text-gray-600 text-center mb-8 font-medium">이 학생의 활동 기록을<br/>정말 삭제하시겠습니까?</p>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setDeleteTargetId(null)}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-extrabold py-4 rounded-xl transition"
+                >
+                  취소
+                </button>
+                <button 
+                  onClick={async () => {
+                    try {
+                      await serverCall('deleteStudentRecord', deleteTargetId, teacherToken);
+                      setDeleteTargetId(null);
+                      await loadRecords(teacherToken);
+                    } catch (e) { alert(e.message); }
+                  }}
+                  className="flex-1 bg-red-500 hover:bg-red-600 text-white font-extrabold py-4 rounded-xl shadow-md transition"
+                >
+                  삭제하기
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {clearAllConfirmStep > 0 && (
+          <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl p-8 w-full max-w-sm shadow-2xl animate-fade-in-up border-2 border-red-200">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                {clearAllConfirmStep === 1 ? '⚠️' : '🚨'}
+              </div>
+              <h3 className="text-xl font-black text-center text-red-600 mb-2">
+                {clearAllConfirmStep === 1 ? '전체 기록 초기화' : '최종 삭제 확인'}
+              </h3>
+              <p className="text-gray-700 text-center mb-8 font-medium break-keep">
+                {clearAllConfirmStep === 1 
+                  ? '저장된 모든 학생의 기록을 삭제하시겠습니까?' 
+                  : '정말 모든 기록을 삭제합니다. 복구할 수 없습니다. 계속하시겠습니까?'}
+              </p>
+              <div className="flex gap-3">
+                <button 
+                  onClick={() => setClearAllConfirmStep(0)}
+                  className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-extrabold py-4 rounded-xl transition"
+                >
+                  취소
+                </button>
+                <button 
+                  onClick={async () => {
+                    if (clearAllConfirmStep === 1) {
+                      setClearAllConfirmStep(2);
+                    } else {
+                      try {
+                        await serverCall('clearAllStudentRecords', teacherToken);
+                        setSavedRecords([]);
+                        setClearAllConfirmStep(0);
+                      } catch (e) { alert(e.message); }
+                    }
+                  }}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-extrabold py-4 rounded-xl shadow-md transition"
+                >
+                  {clearAllConfirmStep === 1 ? '네, 삭제합니다' : '완전 삭제'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {viewingRecord && (
+          <div className="fixed inset-0 bg-gray-900/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
+            <div className="bg-white rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl animate-fade-in-up overflow-hidden">
+              <div className="p-5 sm:p-8 border-b flex justify-between items-center bg-gray-50/80 backdrop-blur">
+                <h3 className="text-2xl font-black text-gray-800 flex items-center">
+                  <span className="bg-indigo-100 text-indigo-700 p-2 rounded-xl mr-3 text-lg">📝</span>
+                  {viewingRecord.studentName} 학생의 작품
+                </h3>
+                <button 
+                  onClick={() => setViewingRecord(null)}
+                  className="bg-gray-200 hover:bg-gray-300 text-gray-600 rounded-full w-10 h-10 flex items-center justify-center font-bold transition"
+                >
+                  ✕
+                </button>
+              </div>
+              
+              <div className="p-5 sm:p-8 overflow-y-auto custom-scrollbar flex-1 space-y-8 bg-white">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                    <p className="font-extrabold text-gray-500 mb-3 flex items-center"><span className="mr-2">✨</span> 최종 선택 실물화 이미지</p>
+                    <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-200">
+                      {viewingRecord.finalImage ? (
+                        <img src={viewingRecord.finalImage} alt="최종 이미지" className="w-full h-auto rounded-lg" />
+                      ) : (
+                        <div className="py-12 text-center text-gray-400">이미지 없음</div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                    <p className="font-extrabold text-gray-500 mb-3 flex items-center"><span className="mr-2">✏️</span> 원본 스케치</p>
+                    <div className="bg-white p-2 rounded-xl shadow-sm border border-gray-200">
+                      {viewingRecord.imageSrc ? (
+                        <img src={viewingRecord.imageSrc} alt="원본 스케치" className="w-full h-auto rounded-lg" />
+                      ) : (
+                        <div className="py-12 text-center text-gray-400">이미지 없음</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {viewingRecord.candidateImages?.length > 1 && (
+                  <div className="bg-purple-50/50 p-6 rounded-2xl border border-purple-100">
+                    <h4 className="font-black text-purple-800 mb-4">실물화 후보 이미지</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {viewingRecord.candidateImages.map((img, idx) => (
+                        <div key={idx} className="bg-white p-2 rounded-xl border border-purple-100">
+                          <div className="text-xs font-bold text-purple-600 mb-2">후보 {idx + 1}</div>
+                          <img src={img} alt={`후보 ${idx + 1}`} className="w-full h-auto rounded-lg" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-emerald-50/50 p-6 rounded-2xl border border-emerald-100 space-y-4">
+                  <h4 className="font-black text-emerald-800 border-b border-emerald-200 pb-2 mb-4">설계 상세 내용</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div><span className="font-extrabold text-gray-500 block text-sm">수송수단 이름</span> <span className="font-bold text-lg">{viewingRecord.vehicleName}</span></div>
+                    <div><span className="font-extrabold text-gray-500 block text-sm">사용 에너지</span> 
+                      <span className="font-bold text-lg text-blue-600">
+                        {viewingRecord.energies?.includes('♻️ 기타') 
+                          ? [...(viewingRecord.energies.filter(e => e !== '♻️ 기타') || []), viewingRecord.energyCustom].join(', ') 
+                          : viewingRecord.energies?.join(', ')}
+                      </span>
+                    </div>
+                  </div>
+                  {viewingRecord.target && <div><span className="font-extrabold text-gray-500 block text-sm">이동 대상 및 방법</span> <span className="font-bold text-gray-800">{viewingRecord.target}</span></div>}
+                  <div><span className="font-extrabold text-gray-500 block text-sm">환경 보호 방법</span> <span className="font-bold text-gray-800">{viewingRecord.eco}</span></div>
+                  {viewingRecord.special && <div><span className="font-extrabold text-gray-500 block text-sm">특별한 기능</span> <span className="font-bold text-gray-800">{viewingRecord.special}</span></div>}
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2 border-t border-emerald-100 border-dashed mt-2">
+                    {viewingRecord.drive && <div><span className="font-extrabold text-gray-500 block text-sm">구동 장치</span> <span className="font-bold text-gray-800">{viewingRecord.drive}</span></div>}
+                    {viewingRecord.steer && <div><span className="font-extrabold text-gray-500 block text-sm">조향 장치</span> <span className="font-bold text-gray-800">{viewingRecord.steer}</span></div>}
+                    {viewingRecord.brake && <div><span className="font-extrabold text-gray-500 block text-sm">제동 장치</span> <span className="font-bold text-gray-800">{viewingRecord.brake}</span></div>}
+                  </div>
+                </div>
+
+                {viewingRecord.finalPoster && (
+                  <div className="bg-amber-50/50 p-6 rounded-2xl border border-amber-100">
+                    <h4 className="font-black text-amber-800 border-b border-amber-200 pb-2 mb-4">최종 설계 포스터</h4>
+                    <img src={viewingRecord.finalPoster} alt="최종 포스터" className="w-full h-auto rounded-xl border border-amber-200 bg-white" />
+                  </div>
+                )}
+
+                {viewingRecord.aiFeedback && (
+                  <div className="bg-blue-50/50 p-6 rounded-2xl border border-blue-100">
+                    <h4 className="font-black text-blue-800 border-b border-blue-200 pb-2 mb-4">AI 피드백 및 학생의 판단</h4>
+                    <div className="space-y-4">
+                      <div>
+                        <span className="font-extrabold text-blue-600 block text-sm mb-1">👍 AI의 칭찬</span>
+                        <p className="text-gray-800 font-medium">{viewingRecord.aiFeedback.compliment}</p>
+                      </div>
+                      <div>
+                        <span className="font-extrabold text-orange-600 block text-sm mb-1">💡 AI의 제안</span>
+                        <p className="text-gray-800 font-medium">{viewingRecord.aiFeedback.suggestion}</p>
+                      </div>
+                      <div className="bg-white p-3 rounded-xl border border-blue-100 flex items-center mt-4">
+                        <span className="font-extrabold text-gray-500 mr-3">학생의 선택:</span> 
+                        <span className={`font-bold px-3 py-1 rounded-lg ${viewingRecord.judgment === 'keep' ? 'bg-gray-100 text-gray-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                          {viewingRecord.judgment === 'keep' ? '🙋 처음 생각 그대로 유지' : '✏️ 의견 반영하여 추가/수정'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              <div className="p-5 sm:p-6 border-t bg-gray-50 flex justify-center">
+                <button 
+                  onClick={() => setViewingRecord(null)}
+                  className="bg-gray-800 hover:bg-gray-900 text-white font-extrabold py-4 px-12 rounded-2xl shadow-md transition text-lg w-full max-w-xs"
+                >
+                  닫기
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-emerald-50/50 font-sans text-gray-800 pb-20">
+      {renderTeacherModals()}
+
+      {isTeacherMode ? (
+        <div className="max-w-6xl mx-auto px-4 py-8 animate-fade-in-up">
+          <TeacherDashboard />
+        </div>
+      ) : (
+        <>
+          <ProgressBar />
+          
+          <div className="max-w-4xl mx-auto px-4">
+            <Header />
+
+            {error && (
+              <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded-r-xl shadow-sm animate-fade-in-up">
+                <div className="flex items-center">
+                  <span className="text-red-500 mr-2 text-xl">⚠️</span>
+                  <p className="text-red-700 font-bold">{error}</p>
+                </div>
+              </div>
+            )}
+
+            {}
+            {step === 1 && renderStep1()}
+            {(step === 2 || step === 3) && renderStep2And3()}
+            {step === 4 && renderStep4()}
+            {step === 5 && renderStep5()}
+            {step === 6 && renderStep6()}
+          </div>
+          
+          {isLoading && (
+            <div className="fixed inset-0 bg-gray-900/60 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-4">
+              <div className="bg-white p-8 rounded-3xl shadow-2xl flex flex-col items-center max-w-sm w-full text-center">
+                <div className="w-16 h-16 border-4 border-emerald-200 border-t-emerald-600 rounded-full animate-spin mb-6"></div>
+                <p className="text-xl font-extrabold text-gray-800 mb-2">{loadingMessage}</p>
+                <p className="text-sm text-gray-500">잠시만 기다려주세요...</p>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
